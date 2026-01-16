@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+backend/venv/
+venv/
+.env
+
+auth.json
+
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+.DS_Store
+
+*.pdf
