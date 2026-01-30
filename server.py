@@ -18,6 +18,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 class ScanRequest(BaseModel):
     url: str
     organization: str
@@ -26,12 +27,14 @@ class ScanRequest(BaseModel):
     mode: str = "quick"
     is_random: bool = False
 
+
 @app.get("/")
 def read_root():
     return {
         "status": "ok",
         "message": "running",
     }
+
 
 @app.post("/api/scan")
 def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
@@ -44,11 +47,7 @@ def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
         req.username,
         req.password,
         req.mode,
-        req.is_random
+        req.is_random,
     )
 
-    return {
-        "status": "accepted",
-        "mode": req.mode,
-        "is_random": req.is_random
-    }
+    return {"status": "accepted", "mode": req.mode, "is_random": req.is_random}

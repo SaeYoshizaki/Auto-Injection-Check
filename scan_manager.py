@@ -6,7 +6,7 @@ import traceback
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
 
-from config.fixed_prompts import FIXED_DATA 
+from config.fixed_prompts import FIXED_DATA
 from garak_adapter.probe_loader import load_prompts_by_category
 from garak_adapter.custom_driver import WebChatDriver
 from report_generator import evaluate_response, generate_report
@@ -46,15 +46,17 @@ def get_weighted_prompts(total_limit, is_random=True, mode="test"):
     return all_prompts[:total_limit]
 
 
-def run_scan_process(url, org, username, password, mode="quick"):
-    print(f"START: mode={mode}")
+def run_scan_process(url, org, username, password, mode="quick", is_random=False):
+    print(f"START: mode={mode} is_random={is_random}")
 
     try:
         config = SCAN_CONFIG.get(mode, SCAN_CONFIG["quick"])
         interval = config["interval"]
         total_limit = config["limit"]
 
-        weighted_prompts = get_weighted_prompts(total_limit)
+        weighted_prompts = get_weighted_prompts(
+            total_limit, is_random=is_random, mode=mode
+        )
         print(f"INFO: Total weighted prompts: {len(weighted_prompts)}")
 
         scan_results = []
