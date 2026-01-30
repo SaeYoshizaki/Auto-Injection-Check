@@ -2,6 +2,7 @@ import sys
 import os
 import time
 import traceback
+from typing import Dict, List, Tuple, Any
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
 
@@ -11,7 +12,7 @@ from garak_adapter.custom_driver import WebChatDriver
 from report_generator import evaluate_response, generate_report
 
 
-CATEGORY_DISTRIBUTION = {
+CATEGORY_DISTRIBUTION: Dict[str, float] = {
     "prompt_injection": 0.35,
     "jailbreak": 0.20,
     "output_handling": 0.15,
@@ -19,54 +20,72 @@ CATEGORY_DISTRIBUTION = {
     "miscellaneous": 0.20,
 }
 
-SCAN_CONFIG = {
+SCAN_CONFIG: Dict[str, Dict[str, int]] = {
     "test": {"limit": 3, "interval": 5},
     "quick": {"limit": 50, "interval": 240},
     "standard": {"limit": 120, "interval": 240},
     "deep": {"limit": 300, "interval": 240},
 }
 
-INPUT_SELECTOR = "form textarea"
-OUTPUT_SELECTOR = ".mr-auto"
+INPUT_SELECTOR: str = "form textarea"
+OUTPUT_SELECTOR: str = ".mr-auto"
 
 
-def get_weighted_prompts(total_limit, is_random=True, mode="test"):
+def get_weighted_prompts(
+    total_limit: int,
+    is_random: bool = True,
+    mode: str = "test",
+) -> List[Tuple[str, str]]:
+
     if not is_random:
-        fixed_list = FIXED_DATA.get(mode, [])
+        fixed_list: List[Dict[str, Any]] = FIXED_DATA.get(mode, [])
         return [(p["prompt"], p["category"]) for p in fixed_list[:total_limit]]
 
-    all_prompts = []
+    all_prompts: List[Tuple[str, str]] = []
+
     for cat, weight in CATEGORY_DISTRIBUTION.items():
-        limit = max(1, int(total_limit * weight))
-        plist = load_prompts_by_category(cat, limit=limit)
+        limit: int = max(1, int(total_limit * weight))
+        plist: List[str] = load_prompts_by_category(cat, limit=limit)
         for p in plist:
             all_prompts.append((p, cat))
 
     return all_prompts[:total_limit]
 
 
-def run_scan_process(url, org, username, password, mode="quick", is_random=False):
+def run_scan_process(
+    url: str,
+    org: str,
+    username: str,
+    password: str,
+    mode: str = "quick",
+    is_random: bool = False,
+) -> Dict[str, Any]:
+
     try:
-        conf = SCAN_CONFIG.get(mode) or SCAN_CONFIG["quick"]
-        interval = conf["interval"]
-        total_limit = conf["limit"]
+        conf: Dict[str, int] = SCAN_CONFIG.get(mode) or SCAN_CONFIG["quick"]
+        interval: int = conf["interval"]
+        total_limit: int = conf["limit"]
 
-        prompts = get_weighted_prompts(total_limit, is_random, mode)
+        prompts: List[Tuple[str, str]] = get_weighted_prompts(
+            total_limit, is_random, mode
+        )
 
-        results = []
-        driver = WebChatDriver(url, INPUT_SELECTOR, OUTPUT_SELECTOR, headless=False)
+        results: List[Dict[str, Any]] = []
+        driver: WebChatDriver = WebChatDriver(
+            url, INPUT_SELECTOR, OUTPUT_SELECTOR, headless=False
+        )
 
         try:
             driver.start()
             driver.login(org, username, password)
 
-            error_streak = 0
+            error_streak: int = 0
 
             for prompt, category in prompts:
-                t0 = time.time()
+                t0: float = time.time()
 
                 try:
-                    response = driver.send_prompt(prompt)
+                    response: str = driver.send_prompt(prompt)
 
                     if response and "[Error]" in response:
                         error_streak += 1
@@ -80,13 +99,19 @@ def run_scan_process(url, org, username, password, mode="quick", is_random=False
                         )
                     else:
                         error_streak = 0
-                        status = evaluate_response(response, "jailbreak")
+                        eval_result: Dict[str, str] = evaluate_response(
+                            prompt, response
+                        )
+                        status: str = eval_result["status"]
+                        reason: str = eval_result.get("reason", "")
+
                         results.append(
                             {
                                 "prompt": prompt,
                                 "category": category,
                                 "response": response,
                                 "status": status,
+                                "reason": reason,
                             }
                         )
 
@@ -106,8 +131,8 @@ def run_scan_process(url, org, username, password, mode="quick", is_random=False
                     print("too many errors, stopping")
                     raise Exception("error streak")
 
-                dt = time.time() - t0
-                sleep_for = interval - dt
+                dt: float = time.time() - t0
+                sleep_for: float = interval - dt
                 if sleep_for > 0:
                     time.sleep(sleep_for)
 
@@ -120,7 +145,7 @@ def run_scan_process(url, org, username, password, mode="quick", is_random=False
             driver.close()
 
             if results:
-                fname = f"scan_report_{mode}_{int(time.time())}.pdf"
+                fname: str = f"scan_report_{mode}_{int(time.time())}.pdf"
                 generate_report(results, fname)
                 print("report saved:", fname)
                 return {"status": "completed", "report_file": fname, "results": results}
@@ -130,3 +155,4 @@ def run_scan_process(url, org, username, password, mode="quick", is_random=False
     except Exception:
         print("init crash")
         traceback.print_exc()
+        return {"status": "failed", "error": "init crash"}

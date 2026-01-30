@@ -1,31 +1,48 @@
 import time
 import logging
-from playwright.sync_api import sync_playwright
+from typing import Optional
+from playwright.sync_api import (
+    sync_playwright,
+    Playwright,
+    Browser,
+    BrowserContext,
+    Page,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class WebChatDriver:
-    def __init__(self, target_url, input_selector, output_selector, headless=True):
-        self.target_url = target_url
-        self.input_selector = input_selector
-        self.output_selector = output_selector
-        self.headless = headless
+    def __init__(
+        self,
+        target_url: str,
+        input_selector: str,
+        output_selector: str,
+        headless: bool = True,
+    ) -> None:
+        self.target_url: str = target_url
+        self.input_selector: str = input_selector
+        self.output_selector: str = output_selector
+        self.headless: bool = headless
 
-        self.playwright = None
-        self.browser = None
-        self.context = None
-        self.page = None
+        self.playwright: Optional[Playwright] = None
+        self.browser: Optional[Browser] = None
+        self.context: Optional[BrowserContext] = None
+        self.page: Optional[Page] = None
 
-    def start(self):
+    def start(self) -> None:
         logger.info(f"Starting browser (headless={self.headless})")
         self.playwright = sync_playwright().start()
         self.browser = self.playwright.chromium.launch(headless=self.headless)
         self.context = self.browser.new_context()
         self.page = self.context.new_page()
 
-    def login(self, org_name, username, password):
+    def login(self, org_name: str, username: str, password: str) -> None:
         logger.info("Opening login page")
+
+        if self.page is None:
+            raise RuntimeError("Driver not started")
+
         self.page.goto(self.target_url)
         self.page.wait_for_load_state("networkidle")
 
@@ -49,20 +66,21 @@ class WebChatDriver:
             self.page.wait_for_selector(self.input_selector, timeout=30000)
 
             logger.info("Login completed")
-            self.context.storage_state(path="auth.json")
+            if self.context:
+                self.context.storage_state(path="auth.json")
 
         except Exception as e:
             logger.error(f"Login failed: {e}")
             raise
 
-    def _clean_text(self, text):
+    def _clean_text(self, text: Optional[str]) -> str:
         if not text:
             return ""
         return text.replace("ロボ丸くん", "").strip()
 
-    def send_prompt(self, prompt):
+    def send_prompt(self, prompt: str) -> str:
         if self.page is None:
-            raise Exception("Driver not started")
+            raise RuntimeError("Driver not started")
 
         try:
             try:
@@ -84,14 +102,14 @@ class WebChatDriver:
             time.sleep(0.5)
             self.page.keyboard.press("Enter")
 
-            start_time = time.time()
-            target_text = ""
+            start_time: float = time.time()
+            target_text: str = ""
 
             while time.time() - start_time < 60:
                 elements = self.page.query_selector_all(self.output_selector)
 
                 if len(elements) >= 2:
-                    text = self._clean_text(elements[-1].inner_text())
+                    text: str = self._clean_text(elements[-1].inner_text())
                     if text:
                         target_text = text
                         break
@@ -101,14 +119,14 @@ class WebChatDriver:
             if not target_text:
                 return "[Error] Timeout: Response did not appear."
 
-            previous_text = ""
-            stable_count = 0
-            stream_start = time.time()
+            previous_text: str = ""
+            stable_count: int = 0
+            stream_start: float = time.time()
 
             while time.time() - stream_start < 120:
                 try:
                     elements = self.page.query_selector_all(self.output_selector)
-                    current_text = self._clean_text(elements[-1].inner_text())
+                    current_text: str = self._clean_text(elements[-1].inner_text())
                 except Exception:
                     break
 
@@ -131,7 +149,7 @@ class WebChatDriver:
         except Exception as e:
             return f"[Error] {e}"
 
-    def close(self):
+    def close(self) -> None:
         if self.browser:
             self.browser.close()
         if self.playwright:
