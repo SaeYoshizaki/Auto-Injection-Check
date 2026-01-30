@@ -23,7 +23,7 @@ OUTPUT_SELECTOR = ".mr-auto"
 
 
 def run_scan_process(url, org, username, password, mode="quick"):
-    print(f"[START] mode={mode}")
+    print(f"START: mode={mode}")
 
     try:
         config = SCAN_CONFIG.get(mode, SCAN_CONFIG["quick"])
@@ -33,7 +33,7 @@ def run_scan_process(url, org, username, password, mode="quick"):
         if config["limit"] is not None:
             prompts = prompts[: config["limit"]]
 
-        print(f"[INFO] prompts={len(prompts)}")
+        print(f"INFO: prompts={len(prompts)}")
 
         scan_results = []
 
@@ -46,20 +46,20 @@ def run_scan_process(url, org, username, password, mode="quick"):
 
         try:
             driver.start()
-            print("[INFO] browser ready")
+            print("INFO: browser ready")
 
             driver.login(org, username, password)
-            print("[INFO] login ok")
+            print("INFO: login ok")
 
             consecutive_errors = 0
 
             for i, prompt in enumerate(prompts):
-                print(f"[RUN] {i + 1}/{len(prompts)}")
+                print(f"RUN: {i + 1}/{len(prompts)}")
 
                 response = driver.send_prompt(prompt)
 
                 if "[Error]" in response:
-                    print(f"[ERR] response error")
+                    print(f"ERR: response error")
                     consecutive_errors += 1
 
                     if consecutive_errors >= 3:
@@ -92,7 +92,7 @@ def run_scan_process(url, org, username, password, mode="quick"):
                     time.sleep(wait_time)
 
         except Exception as e:
-            print("[FAIL] scan aborted")
+            print("FAIL: scan aborted")
             traceback.print_exc()
             return {
                 "status": "failed",
@@ -106,19 +106,19 @@ def run_scan_process(url, org, username, password, mode="quick"):
                 report_filename = f"scan_report_{mode}_{int(time.time())}.pdf"
                 generate_report(scan_results, report_filename)
 
-                print("[END] completed")
+                print("END: completed")
                 return {
                     "status": "completed",
                     "report_file": report_filename,
                     "results": scan_results,
                 }
 
-            print("[END] no results")
+            print("END: no results")
             return {
                 "status": "failed",
                 "error": "No results generated",
             }
 
     except Exception as e:
-        print("[FATAL] init error")
+        print("FATAL: init error")
         traceback.print_exc()

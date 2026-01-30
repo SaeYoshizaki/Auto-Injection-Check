@@ -37,7 +37,7 @@ def read_root():
 
 @app.post("/api/scan")
 def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
-    print(f"[REQ] mode={req.mode} user={req.username}")
+    print(f"REQ: mode={req.mode} user={req.username}")
 
     background_tasks.add_task(
         run_scan_process,

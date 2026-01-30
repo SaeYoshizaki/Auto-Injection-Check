@@ -10,7 +10,7 @@ def main():
         context = browser.new_context()
         page = context.new_page()
 
-        print("[INFO] open")
+        print("INFO: open")
         page.goto(TARGET_URL)
         time.sleep(3)
 
@@ -20,10 +20,10 @@ def main():
         print("=" * 50)
         input("> ")
 
-        print("[INFO] scan form")
+        print("INFO: scan form")
 
         inputs = page.query_selector_all("input")
-        print(f"[INFO] inputs={len(inputs)}")
+        print(f"INFO: inputs={len(inputs)}")
         for i, el in enumerate(inputs):
             try:
                 type_attr = el.get_attribute("type") or "text"
@@ -36,7 +36,7 @@ def main():
                 pass
 
         buttons = page.query_selector_all("button")
-        print(f"[INFO] buttons={len(buttons)}")
+        print(f"INFO: buttons={len(buttons)}")
         for i, el in enumerate(buttons):
             try:
                 text = el.inner_text().replace("\n", " ")[:20]
@@ -45,7 +45,7 @@ def main():
             except:
                 pass
 
-        print("[INFO] done")
+        print("INFO: done")
 
         time.sleep(5)
         browser.close()
