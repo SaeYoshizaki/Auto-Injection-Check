@@ -7,45 +7,45 @@ TARGET_URL = "https://ai-chat.third-scope.com/ts/chat"
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
-        context = browser.new_context()
-        page = context.new_page()
+        ctx = browser.new_context()
+        page = ctx.new_page()
 
-        print("INFO: open")
+        print("INFO: opening page")
         page.goto(TARGET_URL)
         time.sleep(3)
 
-        print("=" * 50)
-        print("check login screen")
-        print("press enter to continue")
-        print("=" * 50)
+        print("=" * 40)
+        print("login screen ok?")
+        print("hit enter when ready")
+        print("=" * 40)
         input("> ")
 
-        print("INFO: scan form")
+        print("INFO: checking form elements")
 
         inputs = page.query_selector_all("input")
-        print(f"INFO: inputs={len(inputs)}")
+        print("INFO: input count =", len(inputs))
+
         for i, el in enumerate(inputs):
             try:
-                type_attr = el.get_attribute("type") or "text"
-                name_attr = el.get_attribute("name") or "-"
-                placeholder = el.get_attribute("placeholder") or "-"
-                print(
-                    f"input[{i}] type={type_attr} name={name_attr} placeholder={placeholder}"
-                )
-            except:
-                pass
+                t = el.get_attribute("type") or "text"
+                n = el.get_attribute("name") or "-"
+                ph = el.get_attribute("placeholder") or "-"
+                print(f"input[{i}] type={t} name={n} ph={ph}")
+            except Exception:
+                continue
 
-        buttons = page.query_selector_all("button")
-        print(f"INFO: buttons={len(buttons)}")
-        for i, el in enumerate(buttons):
+        btns = page.query_selector_all("button")
+        print("INFO: button count =", len(btns))
+
+        for i, el in enumerate(btns):
             try:
-                text = el.inner_text().replace("\n", " ")[:20]
-                type_attr = el.get_attribute("type") or "submit"
-                print(f"button[{i}] type={type_attr} text={text}")
-            except:
-                pass
+                txt = el.inner_text().replace("\n", " ")[:20]
+                t = el.get_attribute("type") or "submit"
+                print(f"button[{i}] type={t} text={txt}")
+            except Exception:
+                continue
 
-        print("INFO: done")
+        print("INFO: scan finished")
 
         time.sleep(5)
         browser.close()

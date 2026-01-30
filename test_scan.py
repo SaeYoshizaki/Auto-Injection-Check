@@ -23,7 +23,7 @@ OUTPUT_SELECTOR = ".mr-auto"
 
 
 def run_scan_process(url, org, username, password, mode="quick"):
-    print(f"START: mode={mode}")
+    print(f"mode={mode}")
 
     try:
         config = SCAN_CONFIG.get(mode, SCAN_CONFIG["quick"])
