@@ -11,8 +11,8 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
 
-from config.fixed_prompts import FIXED_DATA
-from garak_adapter.probe_loader import load_prompts_by_category
+from config.fixed_prompts import get_prompt_entries_for_mode
+from garak_adapter.probe_loader import load_prompt_entries_by_category
 from garak_adapter.custom_driver import WebChatDriver
 from report_generator import (
     evaluate_response,
@@ -33,6 +33,10 @@ CATEGORY_DISTRIBUTION: Dict[str, float] = {
 }
 
 SCAN_CONFIG: Dict[str, Dict[str, int]] = {
+    "smoke": {"limit": 50, "interval": 240, "rounds": 1},
+    "risk_discovery": {"limit": 120, "interval": 240, "rounds": 3},
+    "stability_audit": {"limit": 120, "interval": 240, "rounds": 3},
+    "full_assessment": {"limit": 300, "interval": 240, "rounds": 5},
     "JP-test1": {"limit": 3, "interval": 5, "rounds": 1},
     "JP-test2": {"limit": 3, "interval": 5, "rounds": 1},
     "JP-test3": {"limit": 3, "interval": 5, "rounds": 1},
@@ -61,18 +65,32 @@ def get_weighted_prompts(
     total_limit: int,
     is_random: bool = True,
     mode: str = "test1",
-) -> List[Tuple[str, str]]:
+) -> List[Dict[str, str]]:
 
     if not is_random:
-        fixed_list: List[Dict[str, Any]] = FIXED_DATA.get(mode, [])
-        return [(p["prompt"], p["category"]) for p in fixed_list[:total_limit]]
+        return get_prompt_entries_for_mode(mode, limit=total_limit)
 
-    all_prompts: List[Tuple[str, str]] = []
+    all_prompts: List[Dict[str, str]] = []
+    mode_entries = get_prompt_entries_for_mode(mode)
+    set_types = sorted(
+        {
+            entry["set_type"]
+            for entry in mode_entries
+            if entry.get("set_type")
+        }
+    )
+    source_modes = None
+    if mode in SCAN_CONFIG and not set_types:
+        source_modes = [mode]
     for cat, weight in CATEGORY_DISTRIBUTION.items():
         limit: int = max(1, int(total_limit * weight))
-        plist: List[str] = load_prompts_by_category(cat, limit=limit)
-        for p in plist:
-            all_prompts.append((p, cat))
+        entries = load_prompt_entries_by_category(
+            cat,
+            limit=limit,
+            set_types=set_types or None,
+            source_modes=source_modes,
+        )
+        all_prompts.extend(entries)
 
     return all_prompts[:total_limit]
 
@@ -124,6 +142,7 @@ def build_aggregated_results(
                 "prompt_id": meta["id"],
                 "prompt": meta["prompt"],
                 "category": meta["category"],
+                "set_type": meta.get("set_type"),
                 "status": final_status,
                 "response": worst_round.get("response", ""),
                 "reason": worst_round.get("reason", ""),
@@ -157,19 +176,21 @@ def write_summary_files(
         overall_status = determine_final_status([entry["status"] for entry in aggregated])
     else:
         overall_status = STATUS_ERROR
+
     prompt_summaries = [
-    {
-        "prompt_id": entry["prompt_id"],
-        "category": entry["category"],
-        "final_status": entry["status"],
-        "rounds": entry["rounds"],
-        "round_statuses": entry["round_statuses"],
-        "worst_round": entry["worst_round"],
-        "had_error": entry["had_error"],
-        "error_rounds": entry["error_rounds"],
-    }
-    for entry in aggregated
-]
+        {
+            "prompt_id": entry["prompt_id"],
+            "category": entry["category"],
+            "set_type": entry.get("set_type"),
+            "final_status": entry["status"],
+            "rounds": entry["rounds"],
+            "round_statuses": entry["round_statuses"],
+            "worst_round": entry["worst_round"],
+            "had_error": entry["had_error"],
+            "error_rounds": entry["error_rounds"],
+        }
+        for entry in aggregated
+    ]
 
     summary = {
         "mode": mode,
@@ -186,25 +207,31 @@ def write_summary_files(
     csv_path = log_dir / "summary.csv"
     with csv_path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
-        writer.writerow([
-            "prompt_id",
-            "category",
-            "final_status",
-            "rounds",
-            "round_statuses",
-            "had_error",
-            "error_rounds",
-        ])
+        writer.writerow(
+            [
+                "prompt_id",
+                "category",
+                "set_type",
+                "final_status",
+                "rounds",
+                "round_statuses",
+                "had_error",
+                "error_rounds",
+            ]
+        )
         for entry in aggregated:
-            writer.writerow([
-                entry["prompt_id"],
-                entry["category"],
-                entry["status"],
-                entry["rounds"],
-                format_status_counts(entry["round_statuses"]),
-                entry["had_error"],
-                entry["error_rounds"],
-            ])
+            writer.writerow(
+                [
+                    entry["prompt_id"],
+                    entry["category"],
+                    entry.get("set_type"),
+                    entry["status"],
+                    entry["rounds"],
+                    format_status_counts(entry["round_statuses"]),
+                    entry["had_error"],
+                    entry["error_rounds"],
+                ]
+            )
 
     return json_path, csv_path
 
@@ -213,11 +240,11 @@ def run_scan_process(
     org: str,
     username: str,
     password: str,
-    mode: str = "quick",
+    mode: str = "smoke",
     is_random: bool = False,
 ) -> Dict[str, Any]:
     try:
-        conf = SCAN_CONFIG.get(mode) or SCAN_CONFIG["quick"]
+        conf = SCAN_CONFIG.get(mode) or SCAN_CONFIG["smoke"]
         interval = conf["interval"]
         total_limit = conf["limit"]
         rounds = conf.get("rounds", 1)
@@ -229,10 +256,11 @@ def run_scan_process(
         prompt_metadata = [
             {
                 "id": f"{mode}-{idx+1}",
-                "prompt": prompt,
-                "category": category,
+                "prompt": entry["prompt"],
+                "category": entry["category"],
+                "set_type": entry.get("set_type"),
             }
-            for idx, (prompt, category) in enumerate(prompts)
+            for idx, entry in enumerate(prompts)
         ]
 
         per_prompt_history: Dict[str, List[Dict[str, Any]]] = {
@@ -283,6 +311,7 @@ def run_scan_process(
                         "prompt_id": meta["id"],
                         "prompt": prompt_text,
                         "category": meta["category"],
+                        "set_type": meta.get("set_type"),
                         "round": round_number,
                         "status": entry_status,
                         "response": entry_response,
@@ -308,11 +337,11 @@ def run_scan_process(
         summary_json, summary_csv = write_summary_files(log_dir, mode, rounds, aggregated_results)
 
         if aggregated_results:
-            fname = f"scan_report_{mode}_{timestamp}.pdf"
-            generate_report(aggregated_results, fname)
+            report_path = log_dir / f"scan_report_{mode}_{timestamp}.pdf"
+            generate_report(aggregated_results, str(report_path))
             return {
                 "status": "completed",
-                "report_file": fname,
+                "report_file": str(report_path),
                 "summary_json": str(summary_json),
                 "summary_csv": str(summary_csv),
                 "log_dir": str(log_dir),

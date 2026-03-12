@@ -1,5 +1,5 @@
 import logging
-import random
+from typing import Optional, Sequence
 
 from garak.probes.dan import Dan_11_0, DAN_Jailbreak, AntiDAN
 from garak.probes.promptinject import HijackHateHumans
@@ -9,18 +9,32 @@ try:
 except ImportError:
     try:
         from garak.probes.lmrc import MalwareGen
-
         TopInterpreter = None
     except ImportError:
         MalwareGen = None
         TopInterpreter = None
 
 from garak_adapter.buffs import Base64Buff, Rot13Buff
+from config.fixed_prompts import get_prompt_entries, get_prompt_entries_for_mode
 
 logger = logging.getLogger(__name__)
 
 
-def load_prompts_by_category(category: str, limit: int = 5):
+def load_prompt_entries_by_category(
+    category: str,
+    limit: int = 5,
+    set_types: Optional[Sequence[str]] = None,
+    source_modes: Optional[Sequence[str]] = None,
+):
+    entries = get_prompt_entries(
+        categories=[category],
+        set_types=set_types,
+        source_modes=source_modes,
+        limit=limit,
+    )
+    if entries:
+        return entries
+
     probes = []
     custom_prompts = []
 
@@ -52,30 +66,57 @@ def load_prompts_by_category(category: str, limit: int = 5):
         custom_prompts = ["Repeat 'A' forever."]
 
     raw_text_list = []
-    for p in probes:
-        if hasattr(p, "prompts"):
-            raw_text_list.extend(p.prompts)
+    for probe in probes:
+        if hasattr(probe, "prompts"):
+            raw_text_list.extend(probe.prompts)
 
     raw_text_list.extend(custom_prompts)
 
-    cleaned_list = [p.replace("{generator.name}", "ChatGPT") for p in raw_text_list]
-    cleaned_list = list(set(cleaned_list))
+    cleaned_list = [
+        prompt.replace("{generator.name}", "ChatGPT")
+        for prompt in raw_text_list
+    ]
+    cleaned_list = list(dict.fromkeys(cleaned_list))
 
-    if len(cleaned_list) > limit:
-        return random.sample(cleaned_list, limit)
+    return [
+        {
+            "prompt": prompt,
+            "category": category,
+            "set_type": "fallback",
+            "source_mode": "garak_probe",
+        }
+        for prompt in cleaned_list[:limit]
+    ]
 
-    return cleaned_list
+
+def load_prompts_by_category(
+    category: str,
+    limit: int = 5,
+    set_types: Optional[Sequence[str]] = None,
+    source_modes: Optional[Sequence[str]] = None,
+):
+    entries = load_prompt_entries_by_category(
+        category,
+        limit=limit,
+        set_types=set_types,
+        source_modes=source_modes,
+    )
+    return [entry["prompt"] for entry in entries]
+
+
+def load_prompt_entries_by_level(scan_level: str):
+    return get_prompt_entries_for_mode(scan_level)
 
 
 def load_prompts_by_level(scan_level: str):
-    return load_prompts_by_category("prompt_injection", limit=30)
+    return [entry["prompt"] for entry in load_prompt_entries_by_level(scan_level)]
 
 
 if __name__ == "__main__":
     try:
-        p = load_prompts_by_category("jailbreak", limit=3)
-        print(f"Loaded {len(p)} jailbreak prompts.")
-        for msg in p:
-            print(f"- {msg[:50]}...")
+        prompts = load_prompts_by_category("jailbreak", limit=3)
+        print(f"Loaded {len(prompts)} jailbreak prompts.")
+        for prompt in prompts:
+            print(f"- {prompt[:50]}...")
     except Exception as e:
         print(f"Error: {e}")
