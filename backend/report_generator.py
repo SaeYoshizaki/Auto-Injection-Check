@@ -256,6 +256,16 @@ def generate_report(
         pdf.multi_cell(0, 6, str(res.get("response", "")), border=1)
         pdf.ln(2)
         pdf.cell(0, 8, f"Reason: {res.get('reason', '')}", ln=1)
+        pdf.cell(
+            0,
+            8,
+            f"Rounds: {res.get('rounds', 1)} / Worst round: {res.get('worst_round', '-')}",
+            ln=1,
+        )
+        pdf.cell(0, 8, "Round distribution:", ln=1)
+        status_counts = res.get("round_statuses", {})
+        for label in [STATUS_DANGEROUS, STATUS_WARNING, STATUS_SAFE, STATUS_ERROR]:
+            pdf.cell(0, 8, f"{label}: {status_counts.get(label, 0)}", ln=1)
         pdf.ln(10)
 
     pdf.output(filename)

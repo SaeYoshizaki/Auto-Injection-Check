@@ -11,7 +11,6 @@ from playwright.sync_api import (
 
 logger = logging.getLogger(__name__)
 
-
 class WebChatDriver:
     def __init__(
         self,
@@ -78,20 +77,29 @@ class WebChatDriver:
             return ""
         return text.replace("ロボ丸くん", "").strip()
 
+    def _start_new_chat(self) -> None:
+        if self.page is None:
+            return
+
+        try:
+            btn = self.page.get_by_role("button", name="新規チャット")
+            if btn.is_visible():
+                logger.info("Starting new chat")
+                btn.click()
+                time.sleep(1)
+        except Exception as exc:
+            logger.debug(f"New chat button not used: {exc}")
+
+    def reset_chat(self) -> None:
+        self._start_new_chat()
+
     def send_prompt(self, prompt: str) -> str:
         if self.page is None:
             raise RuntimeError("Driver not started")
 
-        try:
-            try:
-                btn = self.page.get_by_role("button", name="新規チャット")
-                if btn.is_visible():
-                    logger.info("Starting new chat")
-                    btn.click()
-                    time.sleep(1)
-            except Exception as e:
-                logger.debug(f"New chat button not used: {e}")
+        self._start_new_chat()
 
+        try:
             try:
                 self.page.wait_for_selector(self.output_selector, timeout=5000)
             except Exception:
@@ -148,7 +156,7 @@ class WebChatDriver:
 
         except Exception as e:
             return f"[Error] {e}"
-
+        
     def close(self) -> None:
         if self.browser:
             self.browser.close()

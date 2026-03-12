@@ -1,15 +1,28 @@
-import sys
+import csv
+import json
 import os
 import time
 import traceback
-from typing import Dict, List, Tuple, Any
+from collections import Counter
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
 
 from config.fixed_prompts import FIXED_DATA
 from garak_adapter.probe_loader import load_prompts_by_category
 from garak_adapter.custom_driver import WebChatDriver
-from report_generator import evaluate_response, generate_report
+from report_generator import (
+    evaluate_response,
+    generate_report,
+    normalize_status,
+    STATUS_DANGEROUS,
+    STATUS_ERROR,
+    STATUS_SAFE,
+    STATUS_WARNING,
+)
 
 CATEGORY_DISTRIBUTION: Dict[str, float] = {
     "prompt_injection": 0.35,
@@ -20,19 +33,29 @@ CATEGORY_DISTRIBUTION: Dict[str, float] = {
 }
 
 SCAN_CONFIG: Dict[str, Dict[str, int]] = {
-    "JP-test1": {"limit": 3, "interval": 5},
-    "JP-test2": {"limit": 3, "interval": 5},
-    "JP-test3": {"limit": 3, "interval": 5},
-    "test1": {"limit": 3, "interval": 5},
-    "test2": {"limit": 3, "interval": 5},
-    "test3": {"limit": 3, "interval": 5},
-    "quick": {"limit": 50, "interval": 240},
-    "standard": {"limit": 120, "interval": 240},
-    "deep": {"limit": 300, "interval": 240},
+    "JP-test1": {"limit": 3, "interval": 5, "rounds": 1},
+    "JP-test2": {"limit": 3, "interval": 5, "rounds": 1},
+    "JP-test3": {"limit": 3, "interval": 5, "rounds": 1},
+    "test1": {"limit": 3, "interval": 5, "rounds": 1},
+    "test2": {"limit": 3, "interval": 5, "rounds": 1},
+    "test3": {"limit": 3, "interval": 5, "rounds": 1},
+    "quick": {"limit": 50, "interval": 240, "rounds": 1},
+    "standard": {"limit": 120, "interval": 240, "rounds": 3},
+    "deep": {"limit": 300, "interval": 240, "rounds": 5},
 }
 
 INPUT_SELECTOR: str = "form textarea"
 OUTPUT_SELECTOR: str = ".mr-auto"
+
+LOG_ROOT: Path = Path(os.path.dirname(__file__)) / "scan_logs"
+LOG_ROOT.mkdir(parents=True, exist_ok=True)
+
+STATUS_PRIORITY: Dict[str, int] = {
+    STATUS_SAFE: 1,
+    STATUS_ERROR: 2,
+    STATUS_WARNING: 3,
+    STATUS_DANGEROUS: 4,
+}
 
 def get_weighted_prompts(
     total_limit: int,
@@ -53,6 +76,138 @@ def get_weighted_prompts(
 
     return all_prompts[:total_limit]
 
+def ensure_log_dir(mode: str, timestamp: int) -> Path:
+    target = LOG_ROOT / mode / str(timestamp)
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+def determine_final_status(statuses: List[str]) -> str:
+    normalized = [normalize_status(status) for status in statuses]
+
+    if STATUS_DANGEROUS in normalized:
+        return STATUS_DANGEROUS
+    if STATUS_WARNING in normalized:
+        return STATUS_WARNING
+    if all(status == STATUS_ERROR for status in normalized):
+        return STATUS_ERROR
+    if STATUS_ERROR in normalized and STATUS_SAFE in normalized:
+        return STATUS_WARNING
+
+    return STATUS_SAFE
+
+def pick_worst_round(history: List[Dict[str, Any]]) -> Dict[str, Any]:
+    return sorted(
+        history,
+        key=lambda entry: STATUS_PRIORITY.get(entry.get("status", STATUS_WARNING), 0),
+        reverse=True,
+    )[0]
+
+def build_aggregated_results(
+    history_map: Dict[str, List[Dict[str, Any]]],
+    metadata: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    aggregated: List[Dict[str, Any]] = []
+
+    for meta in metadata:
+        history = history_map.get(meta["id"], [])
+        if not history:
+            continue
+
+        statuses = [entry["status"] for entry in history]
+        final_status = determine_final_status(statuses)
+        worst_round = pick_worst_round(history)
+        counter = Counter(statuses)
+        error_rounds = counter.get(STATUS_ERROR, 0)
+
+        aggregated.append(
+            {
+                "prompt_id": meta["id"],
+                "prompt": meta["prompt"],
+                "category": meta["category"],
+                "status": final_status,
+                "response": worst_round.get("response", ""),
+                "reason": worst_round.get("reason", ""),
+                "rounds": len(history),
+                "round_statuses": dict(counter),
+                "worst_round": worst_round.get("round"),
+                "had_error": error_rounds > 0,
+                "error_rounds": error_rounds,
+            }
+        )
+
+    return aggregated
+
+def write_round_log(log_dir: Path, round_number: int, entries: List[Dict[str, Any]]) -> Path:
+    path = log_dir / f"round-{round_number}.json"
+    with path.open("w", encoding="utf-8") as fh:
+        json.dump(entries, fh, ensure_ascii=False, indent=2)
+    return path
+
+def format_status_counts(status_counts: Dict[str, int]) -> str:
+    ordered = [STATUS_DANGEROUS, STATUS_WARNING, STATUS_ERROR, STATUS_SAFE]
+    return ";".join(f"{status}:{status_counts.get(status, 0)}" for status in ordered)
+
+def write_summary_files(
+    log_dir: Path,
+    mode: str,
+    rounds: int,
+    aggregated: List[Dict[str, Any]],
+) -> Tuple[Path, Path]:
+    if aggregated:
+        overall_status = determine_final_status([entry["status"] for entry in aggregated])
+    else:
+        overall_status = STATUS_ERROR
+    prompt_summaries = [
+    {
+        "prompt_id": entry["prompt_id"],
+        "category": entry["category"],
+        "final_status": entry["status"],
+        "rounds": entry["rounds"],
+        "round_statuses": entry["round_statuses"],
+        "worst_round": entry["worst_round"],
+        "had_error": entry["had_error"],
+        "error_rounds": entry["error_rounds"],
+    }
+    for entry in aggregated
+]
+
+    summary = {
+        "mode": mode,
+        "rounds": rounds,
+        "overall_status": overall_status,
+        "prompt_count": len(prompt_summaries),
+        "prompt_summaries": prompt_summaries,
+    }
+
+    json_path = log_dir / "summary.json"
+    with json_path.open("w", encoding="utf-8") as fh:
+        json.dump(summary, fh, ensure_ascii=False, indent=2)
+
+    csv_path = log_dir / "summary.csv"
+    with csv_path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh)
+        writer.writerow([
+            "prompt_id",
+            "category",
+            "final_status",
+            "rounds",
+            "round_statuses",
+            "had_error",
+            "error_rounds",
+        ])
+        for entry in aggregated:
+            writer.writerow([
+                entry["prompt_id"],
+                entry["category"],
+                entry["status"],
+                entry["rounds"],
+                format_status_counts(entry["round_statuses"]),
+                entry["had_error"],
+                entry["error_rounds"],
+            ])
+
+    return json_path, csv_path
+
 def run_scan_process(
     url: str,
     org: str,
@@ -61,15 +216,29 @@ def run_scan_process(
     mode: str = "quick",
     is_random: bool = False,
 ) -> Dict[str, Any]:
-
     try:
         conf = SCAN_CONFIG.get(mode) or SCAN_CONFIG["quick"]
         interval = conf["interval"]
         total_limit = conf["limit"]
+        rounds = conf.get("rounds", 1)
 
         prompts = get_weighted_prompts(total_limit, is_random, mode)
+        timestamp = int(time.time())
+        log_dir = ensure_log_dir(mode, timestamp)
 
-        results = []
+        prompt_metadata = [
+            {
+                "id": f"{mode}-{idx+1}",
+                "prompt": prompt,
+                "category": category,
+            }
+            for idx, (prompt, category) in enumerate(prompts)
+        ]
+
+        per_prompt_history: Dict[str, List[Dict[str, Any]]] = {
+            meta["id"]: [] for meta in prompt_metadata
+        }
+
         driver = WebChatDriver(url, INPUT_SELECTOR, OUTPUT_SELECTOR, headless=False)
 
         try:
@@ -77,41 +246,80 @@ def run_scan_process(
             driver.login(org, username, password)
             error_streak = 0
 
-            for prompt, category in prompts:
-                t0 = time.time()
-                try:
-                    response = driver.send_prompt(prompt)
-                    if response and "[Error]" in response:
+            for round_number in range(1, rounds + 1):
+                round_entries: List[Dict[str, Any]] = []
+                for meta in prompt_metadata:
+                    prompt_text = meta["prompt"]
+                    t0 = time.time()
+                    try:
+                        response = driver.send_prompt(prompt_text)
+                        if not response:
+                            error_streak += 1
+                            entry_status = STATUS_ERROR
+                            entry_reason = "no response"
+                            entry_response = response or ""
+                        elif "[Error]" in response:
+                            error_streak += 1
+                            entry_status = STATUS_ERROR
+                            entry_reason = (
+                                "timeout"
+                                if "Timeout" in response
+                                else "target returned error"
+                            )
+                            entry_response = response
+                        else:
+                            error_streak = 0
+                            eval_result = evaluate_response(prompt_text, response)
+                            entry_status = normalize_status(eval_result.get("status"))
+                            entry_reason = eval_result.get("reason", "")
+                            entry_response = response
+                    except Exception as e:
                         error_streak += 1
-                        results.append({"prompt": prompt, "category": category, "response": response, "status": "ERROR"})
-                    else:
-                        error_streak = 0
-                        eval_result = evaluate_response(prompt, response)
-                        results.append({
-                            "prompt": prompt, 
-                            "category": category, 
-                            "response": response, 
-                            "status": eval_result["status"], 
-                            "reason": eval_result.get("reason", "")
-                        })
-                except Exception as e:
-                    error_streak += 1
-                    results.append({"prompt": prompt, "category": category, "response": str(e), "status": "ERROR"})
+                        entry_status = STATUS_ERROR
+                        entry_reason = "driver exception"
+                        entry_response = str(e)
 
-                if error_streak >= 5:
-                    raise Exception("Too many consecutive errors.")
+                    history_item: Dict[str, Any] = {
+                        "prompt_id": meta["id"],
+                        "prompt": prompt_text,
+                        "category": meta["category"],
+                        "round": round_number,
+                        "status": entry_status,
+                        "response": entry_response,
+                        "reason": entry_reason,
+                    }
 
-                dt = time.time() - t0
-                if interval - dt > 0:
-                    time.sleep(interval - dt)
+                    per_prompt_history[meta["id"]].append(history_item)
+                    round_entries.append(history_item)
+
+                    if error_streak >= 5:
+                        raise Exception("Too many consecutive errors.")
+
+                    dt = time.time() - t0
+                    if interval - dt > 0:
+                        time.sleep(interval - dt)
+
+                write_round_log(log_dir, round_number, round_entries)
 
         finally:
             driver.close()
-            if results:
-                fname = f"scan_report_{mode}_{int(time.time())}.pdf"
-                generate_report(results, fname)
-                return {"status": "completed", "report_file": fname, "results": results}
-            return {"status": "failed", "error": "no results"}
+
+        aggregated_results = build_aggregated_results(per_prompt_history, prompt_metadata)
+        summary_json, summary_csv = write_summary_files(log_dir, mode, rounds, aggregated_results)
+
+        if aggregated_results:
+            fname = f"scan_report_{mode}_{timestamp}.pdf"
+            generate_report(aggregated_results, fname)
+            return {
+                "status": "completed",
+                "report_file": fname,
+                "summary_json": str(summary_json),
+                "summary_csv": str(summary_csv),
+                "log_dir": str(log_dir),
+                "results": aggregated_results,
+            }
+
+        return {"status": "failed", "error": "no results"}
 
     except Exception:
         traceback.print_exc()
