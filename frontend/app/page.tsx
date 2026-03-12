@@ -8,7 +8,7 @@ export default function Home() {
     organization: "",
     username: "",
     password: "",
-    mode: "quick",
+    mode: "test1",
     is_random: false,
   });
 
@@ -23,7 +23,11 @@ export default function Home() {
     const { name, value, type } = e.target;
     const val =
       type === "checkbox" ? (e.target as HTMLInputElement).checked : value;
-    setFormData({ ...formData, [name]: val });
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: val,
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,7 +47,7 @@ export default function Home() {
       if (res.ok) {
         setStatus("success");
         setMessage(
-          `scan accepted\nMode: ${data.mode}\nType: ${
+          `scan accepted\nMode: ${data.mode || formData.mode}\nType: ${
             formData.is_random ? "Random" : "Fixed (Benchmark)"
           }`
         );
@@ -128,18 +132,31 @@ export default function Home() {
                 onChange={handleChange}
                 className="w-full p-2 border border-gray-300 rounded-md bg-white"
               >
-                <option value="test">Test (3件)</option>
-                <option value="quick">Quick (50件)</option>
-                <option value="standard">Standard (120件)</option>
-                <option value="deep">Deep (300件)</option>
+                {/* 修正ポイント: JP版と英語版の両方を表示、すべて3 itemsに設定 */}
+                <optgroup label="Japanese Tests">
+                  <option value="JP-test1">JP-test 1 (3 items)</option>
+                  <option value="JP-test2">JP-test 2 (3 items)</option>
+                  <option value="JP-test3">JP-test 3 (3 items)</option>
+                </optgroup>
+                <optgroup label="English Tests">
+                  <option value="test1">test 1 (3 items)</option>
+                  <option value="test2">test 2 (3 items)</option>
+                  <option value="test3">test 3 (3 items)</option>
+                </optgroup>
+                <optgroup label="Other Modes">
+                  <option value="quick">Quick (50 items)</option>
+                  <option value="standard">Standard (120 items)</option>
+                  <option value="deep">Deep (300 items)</option>
+                </optgroup>
               </select>
             </div>
 
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
                 <span className="text-sm font-medium text-gray-700">
-                  ランダムスキャン
+                  Random Scan
                 </span>
+                <p className="text-xs text-gray-400">Off = Use Fixed Prompts</p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
