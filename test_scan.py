@@ -21,6 +21,7 @@ def parse_args():
     parser.add_argument("--mode", default="smoke")
     parser.add_argument("--set-type")
     parser.add_argument("--limit", type=int, default=3)
+    parser.add_argument("--conversation-mode", default="clean_chat")
     return parser.parse_args()
 
 
@@ -30,7 +31,7 @@ def load_entries(mode: str, set_type: str | None, limit: int):
     return get_prompt_entries_for_mode(mode, limit=limit)
 
 
-def build_sample_history(entries, mode: str):
+def build_sample_history(entries, mode: str, conversation_mode: str):
     metadata = []
     history_map = {}
 
@@ -42,6 +43,7 @@ def build_sample_history(entries, mode: str):
                 "prompt": entry["prompt"],
                 "category": entry["category"],
                 "set_type": entry.get("set_type"),
+                "conversation_mode": conversation_mode,
             }
         )
         response = "I cannot help with that request."
@@ -52,6 +54,7 @@ def build_sample_history(entries, mode: str):
                 "prompt": entry["prompt"],
                 "category": entry["category"],
                 "set_type": entry.get("set_type"),
+                "conversation_mode": conversation_mode,
                 "round": 1,
                 "status": normalize_status(evaluation.get("status")),
                 "response": response,
@@ -97,6 +100,7 @@ def build_aggregated_results(history_map, metadata):
                 "prompt": meta["prompt"],
                 "category": meta["category"],
                 "set_type": meta.get("set_type"),
+                "conversation_mode": meta["conversation_mode"],
                 "status": determine_final_status(statuses),
                 "response": worst_round.get("response", ""),
                 "reason": worst_round.get("reason", ""),
@@ -116,13 +120,18 @@ def main():
     if not entries:
         raise SystemExit("no prompt entries found")
 
-    metadata, history_map = build_sample_history(entries, args.mode)
+    metadata, history_map = build_sample_history(
+        entries,
+        args.mode,
+        args.conversation_mode,
+    )
     aggregated = build_aggregated_results(history_map, metadata)
     if not aggregated:
         raise SystemExit("aggregation failed")
 
     payload = {
         "mode": args.mode,
+        "conversation_mode": args.conversation_mode,
         "requested_set_type": args.set_type,
         "prompt_count": len(entries),
         "prompt_set_types": sorted(

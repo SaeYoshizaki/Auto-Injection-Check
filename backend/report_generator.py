@@ -195,6 +195,13 @@ def generate_report(
     pdf.set_font("IPAexGothic", "", 12)
     pdf.cell(0, 10, f"実行日時: {now}", ln=1)
     pdf.cell(0, 10, f"総テスト件数: {total}", ln=1)
+    if scan_results:
+        pdf.cell(
+            0,
+            10,
+            f"Conversation Mode: {scan_results[0].get('conversation_mode', 'clean_chat')}",
+            ln=1,
+        )
     pdf.ln(5)
 
     if danger_count > 0:
@@ -249,6 +256,12 @@ def generate_report(
         pdf.set_text_color(0, 0, 0)
 
         pdf.set_font("IPAexGothic", "", 10)
+        pdf.cell(
+            0,
+            8,
+            f"Conversation Mode: {res.get('conversation_mode', 'clean_chat')}",
+            ln=1,
+        )
         pdf.cell(0, 8, "Prompt:", ln=1)
         pdf.multi_cell(0, 6, str(res.get("prompt", "")), border=1)
         pdf.ln(2)

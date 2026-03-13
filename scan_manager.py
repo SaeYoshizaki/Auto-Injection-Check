@@ -5,7 +5,7 @@ import time
 import traceback
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import sys
 
@@ -23,6 +23,9 @@ from report_generator import (
     STATUS_SAFE,
     STATUS_WARNING,
 )
+
+DEFAULT_CONVERSATION_MODE = "clean_chat"
+CONVERSATION_MODES = {DEFAULT_CONVERSATION_MODE, "conversational"}
 
 CATEGORY_DISTRIBUTION: Dict[str, float] = {
     "prompt_injection": 0.35,
@@ -61,16 +64,16 @@ STATUS_PRIORITY: Dict[str, int] = {
     STATUS_DANGEROUS: 4,
 }
 
+
 def get_weighted_prompts(
     total_limit: int,
     is_random: bool = True,
     mode: str = "test1",
-) -> List[Dict[str, str]]:
-
+) -> List[Dict[str, Any]]:
     if not is_random:
         return get_prompt_entries_for_mode(mode, limit=total_limit)
 
-    all_prompts: List[Dict[str, str]] = []
+    all_prompts: List[Dict[str, Any]] = []
     mode_entries = get_prompt_entries_for_mode(mode)
     set_types = sorted(
         {
@@ -82,10 +85,11 @@ def get_weighted_prompts(
     source_modes = None
     if mode in SCAN_CONFIG and not set_types:
         source_modes = [mode]
-    for cat, weight in CATEGORY_DISTRIBUTION.items():
-        limit: int = max(1, int(total_limit * weight))
+
+    for category, weight in CATEGORY_DISTRIBUTION.items():
+        limit = max(1, int(total_limit * weight))
         entries = load_prompt_entries_by_category(
-            cat,
+            category,
             limit=limit,
             set_types=set_types or None,
             source_modes=source_modes,
@@ -94,10 +98,19 @@ def get_weighted_prompts(
 
     return all_prompts[:total_limit]
 
-def ensure_log_dir(mode: str, timestamp: int) -> Path:
-    target = LOG_ROOT / mode / str(timestamp)
+
+def normalize_conversation_mode(conversation_mode: str) -> str:
+    normalized = (conversation_mode or DEFAULT_CONVERSATION_MODE).strip()
+    if normalized not in CONVERSATION_MODES:
+        raise ValueError(f"Unsupported conversation mode: {conversation_mode}")
+    return normalized
+
+
+def ensure_log_dir(mode: str, conversation_mode: str, timestamp: int) -> Path:
+    target = LOG_ROOT / mode / conversation_mode / str(timestamp)
     target.mkdir(parents=True, exist_ok=True)
     return target
+
 
 def determine_final_status(statuses: List[str]) -> str:
     normalized = [normalize_status(status) for status in statuses]
@@ -113,12 +126,14 @@ def determine_final_status(statuses: List[str]) -> str:
 
     return STATUS_SAFE
 
+
 def pick_worst_round(history: List[Dict[str, Any]]) -> Dict[str, Any]:
     return sorted(
         history,
         key=lambda entry: STATUS_PRIORITY.get(entry.get("status", STATUS_WARNING), 0),
         reverse=True,
     )[0]
+
 
 def build_aggregated_results(
     history_map: Dict[str, List[Dict[str, Any]]],
@@ -143,6 +158,7 @@ def build_aggregated_results(
                 "prompt": meta["prompt"],
                 "category": meta["category"],
                 "set_type": meta.get("set_type"),
+                "conversation_mode": meta["conversation_mode"],
                 "status": final_status,
                 "response": worst_round.get("response", ""),
                 "reason": worst_round.get("reason", ""),
@@ -156,22 +172,26 @@ def build_aggregated_results(
 
     return aggregated
 
+
 def write_round_log(log_dir: Path, round_number: int, entries: List[Dict[str, Any]]) -> Path:
     path = log_dir / f"round-{round_number}.json"
     with path.open("w", encoding="utf-8") as fh:
         json.dump(entries, fh, ensure_ascii=False, indent=2)
     return path
 
+
 def format_status_counts(status_counts: Dict[str, int]) -> str:
     ordered = [STATUS_DANGEROUS, STATUS_WARNING, STATUS_ERROR, STATUS_SAFE]
     return ";".join(f"{status}:{status_counts.get(status, 0)}" for status in ordered)
 
+
 def write_summary_files(
     log_dir: Path,
     mode: str,
+    conversation_mode: str,
     rounds: int,
     aggregated: List[Dict[str, Any]],
-) -> Tuple[Path, Path]:
+) -> tuple[Path, Path]:
     if aggregated:
         overall_status = determine_final_status([entry["status"] for entry in aggregated])
     else:
@@ -182,6 +202,7 @@ def write_summary_files(
             "prompt_id": entry["prompt_id"],
             "category": entry["category"],
             "set_type": entry.get("set_type"),
+            "conversation_mode": entry["conversation_mode"],
             "final_status": entry["status"],
             "rounds": entry["rounds"],
             "round_statuses": entry["round_statuses"],
@@ -194,6 +215,7 @@ def write_summary_files(
 
     summary = {
         "mode": mode,
+        "conversation_mode": conversation_mode,
         "rounds": rounds,
         "overall_status": overall_status,
         "prompt_count": len(prompt_summaries),
@@ -212,6 +234,7 @@ def write_summary_files(
                 "prompt_id",
                 "category",
                 "set_type",
+                "conversation_mode",
                 "final_status",
                 "rounds",
                 "round_statuses",
@@ -225,6 +248,7 @@ def write_summary_files(
                     entry["prompt_id"],
                     entry["category"],
                     entry.get("set_type"),
+                    entry["conversation_mode"],
                     entry["status"],
                     entry["rounds"],
                     format_status_counts(entry["round_statuses"]),
@@ -235,15 +259,18 @@ def write_summary_files(
 
     return json_path, csv_path
 
+
 def run_scan_process(
     url: str,
     org: str,
     username: str,
     password: str,
-    mode: str = "smoke",
+    mode: str = "quick",
     is_random: bool = False,
+    conversation_mode: str = DEFAULT_CONVERSATION_MODE,
 ) -> Dict[str, Any]:
     try:
+        normalized_conversation_mode = normalize_conversation_mode(conversation_mode)
         conf = SCAN_CONFIG.get(mode) or SCAN_CONFIG["smoke"]
         interval = conf["interval"]
         total_limit = conf["limit"]
@@ -251,14 +278,15 @@ def run_scan_process(
 
         prompts = get_weighted_prompts(total_limit, is_random, mode)
         timestamp = int(time.time())
-        log_dir = ensure_log_dir(mode, timestamp)
+        log_dir = ensure_log_dir(mode, normalized_conversation_mode, timestamp)
 
         prompt_metadata = [
             {
-                "id": f"{mode}-{idx+1}",
+                "id": f"{mode}-{idx + 1}",
                 "prompt": entry["prompt"],
                 "category": entry["category"],
                 "set_type": entry.get("set_type"),
+                "conversation_mode": normalized_conversation_mode,
             }
             for idx, entry in enumerate(prompts)
         ]
@@ -280,7 +308,10 @@ def run_scan_process(
                     prompt_text = meta["prompt"]
                     t0 = time.time()
                     try:
-                        response = driver.send_prompt(prompt_text)
+                        response = driver.send_prompt(
+                            prompt_text,
+                            conversation_mode=normalized_conversation_mode,
+                        )
                         if not response:
                             error_streak += 1
                             entry_status = STATUS_ERROR
@@ -301,17 +332,18 @@ def run_scan_process(
                             entry_status = normalize_status(eval_result.get("status"))
                             entry_reason = eval_result.get("reason", "")
                             entry_response = response
-                    except Exception as e:
+                    except Exception as exc:
                         error_streak += 1
                         entry_status = STATUS_ERROR
                         entry_reason = "driver exception"
-                        entry_response = str(e)
+                        entry_response = str(exc)
 
                     history_item: Dict[str, Any] = {
                         "prompt_id": meta["id"],
                         "prompt": prompt_text,
                         "category": meta["category"],
                         "set_type": meta.get("set_type"),
+                        "conversation_mode": normalized_conversation_mode,
                         "round": round_number,
                         "status": entry_status,
                         "response": entry_response,
@@ -334,13 +366,20 @@ def run_scan_process(
             driver.close()
 
         aggregated_results = build_aggregated_results(per_prompt_history, prompt_metadata)
-        summary_json, summary_csv = write_summary_files(log_dir, mode, rounds, aggregated_results)
+        summary_json, summary_csv = write_summary_files(
+            log_dir,
+            mode,
+            normalized_conversation_mode,
+            rounds,
+            aggregated_results,
+        )
 
         if aggregated_results:
             report_path = log_dir / f"scan_report_{mode}_{timestamp}.pdf"
             generate_report(aggregated_results, str(report_path))
             return {
                 "status": "completed",
+                "conversation_mode": normalized_conversation_mode,
                 "report_file": str(report_path),
                 "summary_json": str(summary_json),
                 "summary_csv": str(summary_csv),

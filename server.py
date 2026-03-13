@@ -24,6 +24,7 @@ app.add_middleware(
 
 JOB_STORE: Dict[str, Dict[str, Any]] = {}
 JOB_LOCK = threading.Lock()
+ALLOWED_CONVERSATION_MODES = {"clean_chat", "conversational"}
 
 
 class ScanRequest(BaseModel):
@@ -33,6 +34,7 @@ class ScanRequest(BaseModel):
     password: str
     mode: str = "smoke"
     is_random: bool = False
+    conversation_mode: str = "clean_chat"
 
 
 def update_job(job_id: str, **fields: Any) -> None:
@@ -54,6 +56,7 @@ def run_scan_job(job_id: str, req: ScanRequest) -> None:
         req.password,
         req.mode,
         req.is_random,
+        req.conversation_mode,
     )
     status = result.get("status", "failed")
     update_job(
@@ -71,6 +74,9 @@ def read_root():
 
 @app.post("/api/scan")
 def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
+    if req.conversation_mode not in ALLOWED_CONVERSATION_MODES:
+        raise HTTPException(status_code=400, detail="invalid conversation_mode")
+
     job_id = uuid.uuid4().hex
     with JOB_LOCK:
         JOB_STORE[job_id] = {
@@ -79,6 +85,7 @@ def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
             "created_at": datetime.utcnow().isoformat(),
             "mode": req.mode,
             "is_random": req.is_random,
+            "conversation_mode": req.conversation_mode,
         }
 
     background_tasks.add_task(run_scan_job, job_id, req)
@@ -88,6 +95,7 @@ def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
         "job_id": job_id,
         "mode": req.mode,
         "is_random": req.is_random,
+        "conversation_mode": req.conversation_mode,
     }
 
 

@@ -11,6 +11,7 @@ type ScanResponse = {
   job_id: string;
   mode: string;
   is_random: boolean;
+  conversation_mode: string;
 };
 
 type ScanJobResult = {
@@ -18,6 +19,7 @@ type ScanJobResult = {
   job_id: string;
   mode?: string;
   is_random?: boolean;
+  conversation_mode?: string;
   created_at?: string;
   started_at?: string;
   finished_at?: string;
@@ -42,6 +44,7 @@ export default function Home() {
     password: "",
     mode: "smoke",
     is_random: false,
+    conversation_mode: "clean_chat",
   });
 
   const [status, setStatus] = useState<ScanStatus>("idle");
@@ -155,6 +158,8 @@ export default function Home() {
       setMessage(
         `scan accepted\nJob ID: ${data.job_id}\nMode: ${
           data.mode || formData.mode
+        }\nConversation Mode: ${
+          data.conversation_mode || formData.conversation_mode
         }\nPrompt Source: ${
           formData.is_random ? "Category Sample" : "Benchmark Set"
         }\nStatus: queued`
@@ -259,6 +264,21 @@ export default function Home() {
                   <option value="standard">Standard</option>
                   <option value="deep">Deep</option>
                 </optgroup>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Conversation Mode
+              </label>
+              <select
+                name="conversation_mode"
+                value={formData.conversation_mode}
+                onChange={handleChange}
+                className="w-full p-2 border border-gray-300 rounded-md bg-white"
+              >
+                <option value="clean_chat">Clean Chat</option>
+                <option value="conversational">Conversational</option>
               </select>
             </div>
 

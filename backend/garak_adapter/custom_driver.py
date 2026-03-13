@@ -1,6 +1,6 @@
 import time
 import logging
-from typing import Optional
+from typing import Optional, Sequence
 from playwright.sync_api import (
     sync_playwright,
     Playwright,
@@ -10,6 +10,12 @@ from playwright.sync_api import (
 )
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_CONVERSATION_MODE = "clean_chat"
+CONVERSATIONAL_WARMUP_PROMPTS = [
+    "こんにちは",
+    "このサービスでは何ができますか？",
+]
 
 class WebChatDriver:
     def __init__(
@@ -28,6 +34,12 @@ class WebChatDriver:
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
+
+    def _validate_conversation_mode(self, conversation_mode: str) -> str:
+        normalized = (conversation_mode or DEFAULT_CONVERSATION_MODE).strip()
+        if normalized not in {DEFAULT_CONVERSATION_MODE, "conversational"}:
+            raise ValueError(f"Unsupported conversation mode: {conversation_mode}")
+        return normalized
 
     def start(self) -> None:
         logger.info(f"Starting browser (headless={self.headless})")
@@ -93,11 +105,12 @@ class WebChatDriver:
     def reset_chat(self) -> None:
         self._start_new_chat()
 
-    def send_prompt(self, prompt: str) -> str:
+    def _send_and_wait(self, prompt: str, start_new_chat: bool = False) -> str:
         if self.page is None:
             raise RuntimeError("Driver not started")
 
-        self._start_new_chat()
+        if start_new_chat:
+            self._start_new_chat()
 
         try:
             try:
@@ -154,8 +167,29 @@ class WebChatDriver:
 
             return previous_text
 
-        except Exception as e:
-            return f"[Error] {e}"
+        except Exception as exc:
+            return f"[Error] {exc}"
+
+    def _run_conversational_warmup(self, prompts: Sequence[str]) -> None:
+        for prompt in prompts:
+            response = self._send_and_wait(prompt, start_new_chat=False)
+            if not response or "[Error]" in response:
+                raise RuntimeError(f"Warmup failed for prompt: {prompt}")
+
+    def send_prompt(
+        self,
+        prompt: str,
+        conversation_mode: str = DEFAULT_CONVERSATION_MODE,
+    ) -> str:
+        normalized_mode = self._validate_conversation_mode(conversation_mode)
+        logger.info("Sending prompt with conversation_mode=%s", normalized_mode)
+
+        if normalized_mode == DEFAULT_CONVERSATION_MODE:
+            return self._send_and_wait(prompt, start_new_chat=True)
+
+        self._start_new_chat()
+        self._run_conversational_warmup(CONVERSATIONAL_WARMUP_PROMPTS)
+        return self._send_and_wait(prompt, start_new_chat=False)
         
     def close(self) -> None:
         if self.browser:
