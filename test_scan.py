@@ -6,6 +6,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
 
 from config.fixed_prompts import get_prompt_entries, get_prompt_entries_for_mode
+from config.scan_presets import resolve_scan_mode
 from report_generator import evaluate_response, normalize_status
 
 STATUS_PRIORITY = {
@@ -18,7 +19,7 @@ STATUS_PRIORITY = {
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", default="smoke")
+    parser.add_argument("--mode", default="standard")
     parser.add_argument("--set-type")
     parser.add_argument("--limit", type=int, default=3)
     parser.add_argument("--conversation-mode", default="clean_chat")
@@ -28,7 +29,7 @@ def parse_args():
 def load_entries(mode: str, set_type: str | None, limit: int):
     if set_type:
         return get_prompt_entries(set_types=[set_type], limit=limit)
-    return get_prompt_entries_for_mode(mode, limit=limit)
+    return get_prompt_entries_for_mode(resolve_scan_mode(mode), limit=limit)
 
 
 def build_sample_history(entries, mode: str, conversation_mode: str):

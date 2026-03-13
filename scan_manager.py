@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+import random
 import time
 import traceback
 from collections import Counter
@@ -11,7 +12,12 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
 
-from config.fixed_prompts import get_prompt_entries_for_mode
+from config.fixed_prompts import get_prompt_entries, get_prompt_variants
+from config.scan_presets import (
+    CATEGORY_ORDER,
+    build_scan_settings,
+    summarize_conversation_mode,
+)
 from garak_adapter.probe_loader import load_prompt_entries_by_category
 from garak_adapter.custom_driver import WebChatDriver
 from report_generator import (
@@ -27,23 +33,9 @@ from report_generator import (
 DEFAULT_CONVERSATION_MODE = "clean_chat"
 CONVERSATION_MODES = {DEFAULT_CONVERSATION_MODE, "conversational"}
 
-CATEGORY_DISTRIBUTION: Dict[str, float] = {
-    "prompt_injection": 0.35,
-    "jailbreak": 0.20,
-    "output_handling": 0.15,
-    "excessive_agency": 0.10,
-    "miscellaneous": 0.20,
-}
-
-SCAN_CONFIG: Dict[str, Dict[str, int]] = {
-    "smoke": {"limit": 2, "interval": 5, "rounds": 1},
-    "risk_discovery": {"limit": 120, "interval": 240, "rounds": 3},
-    "stability_audit": {"limit": 120, "interval": 240, "rounds": 3},
-    "full_assessment": {"limit": 300, "interval": 240, "rounds": 5},
-}
-
 INPUT_SELECTOR: str = "form textarea"
 OUTPUT_SELECTOR: str = ".mr-auto"
+DEFAULT_INTERVAL_SECONDS = 5
 
 LOG_ROOT: Path = Path(os.path.dirname(__file__)) / "scan_logs"
 LOG_ROOT.mkdir(parents=True, exist_ok=True)
@@ -54,40 +46,6 @@ STATUS_PRIORITY: Dict[str, int] = {
     STATUS_WARNING: 3,
     STATUS_DANGEROUS: 4,
 }
-
-
-def get_weighted_prompts(
-    total_limit: int,
-    is_random: bool = True,
-    mode: str = "smoke",
-) -> List[Dict[str, Any]]:
-    if not is_random:
-        return get_prompt_entries_for_mode(mode, limit=total_limit)
-
-    all_prompts: List[Dict[str, Any]] = []
-    mode_entries = get_prompt_entries_for_mode(mode)
-    set_types = sorted(
-        {
-            entry["set_type"]
-            for entry in mode_entries
-            if entry.get("set_type")
-        }
-    )
-    source_modes = None
-    if mode in SCAN_CONFIG and not set_types:
-        source_modes = [mode]
-
-    for category, weight in CATEGORY_DISTRIBUTION.items():
-        limit = max(1, int(total_limit * weight))
-        entries = load_prompt_entries_by_category(
-            category,
-            limit=limit,
-            set_types=set_types or None,
-            source_modes=source_modes,
-        )
-        all_prompts.extend(entries)
-
-    return all_prompts[:total_limit]
 
 
 def normalize_conversation_mode(conversation_mode: str) -> str:
@@ -176,11 +134,163 @@ def format_status_counts(status_counts: Dict[str, int]) -> str:
     return ";".join(f"{status}:{status_counts.get(status, 0)}" for status in ordered)
 
 
+def allocate_counts(
+    total: int,
+    distribution: Dict[str, int],
+    keys: tuple[str, ...] | List[str],
+) -> Dict[str, int]:
+    if total <= 0:
+        return {key: 0 for key in keys}
+
+    raw_counts = {
+        key: (total * distribution.get(key, 0)) / 100 for key in keys
+    }
+    counts = {key: int(raw_counts[key]) for key in keys}
+    remaining = total - sum(counts.values())
+    remainders = sorted(
+        keys,
+        key=lambda key: (raw_counts[key] - counts[key], -list(keys).index(key)),
+        reverse=True,
+    )
+    for key in remainders[:remaining]:
+        counts[key] += 1
+    return counts
+
+
+def stable_entry_key(entry: Dict[str, Any]) -> tuple[str, str, str, str]:
+    return (
+        str(entry.get("source_id") or ""),
+        str(entry.get("base_source_id") or ""),
+        str(entry.get("variant_type") or ""),
+        str(entry.get("prompt") or ""),
+    )
+
+
+def stable_sort_entries(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return sorted(entries, key=stable_entry_key)
+
+
+def load_base_entries(category: str, set_types: tuple[str, ...]) -> List[Dict[str, Any]]:
+    entries = get_prompt_entries(categories=[category], set_types=set_types)
+    if entries:
+        return stable_sort_entries(entries)
+    return stable_sort_entries(
+        load_prompt_entries_by_category(category, limit=200, set_types=set_types)
+    )
+
+
+def load_variant_map(category: str, set_types: tuple[str, ...]) -> Dict[str, List[Dict[str, Any]]]:
+    variants = get_prompt_variants(categories=[category], set_types=set_types)
+    variant_map: Dict[str, List[Dict[str, Any]]] = {}
+    for entry in variants:
+        base_source_id = entry.get("base_source_id")
+        if not base_source_id:
+            continue
+        variant_map.setdefault(base_source_id, []).append(entry)
+    for base_source_id, grouped_entries in variant_map.items():
+        variant_map[base_source_id] = stable_sort_entries(grouped_entries)
+    return variant_map
+
+
+def select_category_prompts(
+    category: str,
+    target_count: int,
+    settings: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    if target_count <= 0:
+        return []
+
+    set_types = tuple(settings["set_types"])
+    variants_per_base = int(settings["variants_per_base"])
+    base_entries = load_base_entries(category, set_types)
+    if not base_entries:
+        return []
+
+    variant_map = load_variant_map(category, set_types)
+    selected: List[Dict[str, Any]] = []
+
+    for base_entry in base_entries:
+        bundle = [base_entry]
+        variants = variant_map.get(base_entry.get("source_id") or "", [])
+        bundle.extend(variants[: max(0, variants_per_base - 1)])
+        for entry in bundle:
+            selected.append(entry)
+            if len(selected) >= target_count:
+                return selected
+
+    if len(selected) >= target_count:
+        return selected[:target_count]
+
+    fallback_pool = list(base_entries)
+    while len(selected) < target_count and fallback_pool:
+        selected.append(fallback_pool[len(selected) % len(fallback_pool)])
+
+    return selected[:target_count]
+
+
+def build_scan_cases(settings: Dict[str, Any]) -> List[Dict[str, Any]]:
+    counts = allocate_counts(
+        int(settings["total_limit"]),
+        settings["category_distribution"],
+        CATEGORY_ORDER,
+    )
+
+    prompt_entries: List[Dict[str, Any]] = []
+    for category in CATEGORY_ORDER:
+        prompt_entries.extend(
+            select_category_prompts(category, counts[category], settings)
+        )
+
+    prompt_entries = prompt_entries[: int(settings["total_limit"])]
+    prompt_entries = stable_sort_entries(prompt_entries)
+
+    conversation_counts = allocate_counts(
+        len(prompt_entries),
+        settings["conversation_mode_distribution"],
+        [DEFAULT_CONVERSATION_MODE, "conversational"],
+    )
+
+    mode = settings["mode"]
+    conversation_modes: List[str] = []
+    for conversation_mode in [DEFAULT_CONVERSATION_MODE, "conversational"]:
+        conversation_modes.extend(
+            [conversation_mode] * conversation_counts.get(conversation_mode, 0)
+        )
+    while len(conversation_modes) < len(prompt_entries):
+        conversation_modes.append(DEFAULT_CONVERSATION_MODE)
+
+    return [
+        {
+            "id": f"{mode}-{idx + 1}",
+            "prompt": entry["prompt"],
+            "category": entry["category"],
+            "set_type": entry.get("set_type"),
+            "conversation_mode": conversation_modes[idx],
+            "source_id": entry.get("source_id"),
+            "base_source_id": entry.get("base_source_id"),
+            "variant_type": entry.get("variant_type"),
+        }
+        for idx, entry in enumerate(prompt_entries)
+    ]
+
+
+def maybe_shuffle_cases(
+    cases: List[Dict[str, Any]],
+    seed: int | None,
+    shuffle_enabled: bool,
+) -> List[Dict[str, Any]]:
+    copied_cases = list(cases)
+    if not shuffle_enabled:
+        return copied_cases
+
+    rng = random.Random(seed) if seed is not None else random.Random()
+    rng.shuffle(copied_cases)
+    return copied_cases
+
+
 def write_summary_files(
     log_dir: Path,
-    mode: str,
-    conversation_mode: str,
-    rounds: int,
+    scan_settings: Dict[str, Any],
     aggregated: List[Dict[str, Any]],
 ) -> tuple[Path, Path]:
     if aggregated:
@@ -205,9 +315,18 @@ def write_summary_files(
     ]
 
     summary = {
-        "mode": mode,
-        "conversation_mode": conversation_mode,
-        "rounds": rounds,
+        "mode": scan_settings["mode"],
+        "requested_mode": scan_settings["requested_mode"],
+        "conversation_mode": summarize_conversation_mode(
+            scan_settings["conversation_mode_distribution"]
+        ),
+        "conversation_mode_distribution": scan_settings["conversation_mode_distribution"],
+        "rounds": scan_settings["rounds"],
+        "total_limit": scan_settings["total_limit"],
+        "variants_per_base": scan_settings["variants_per_base"],
+        "shuffle_enabled": scan_settings["shuffle_enabled"],
+        "seed": scan_settings.get("seed"),
+        "category_distribution": scan_settings["category_distribution"],
         "overall_status": overall_status,
         "prompt_count": len(prompt_summaries),
         "prompt_summaries": prompt_summaries,
@@ -256,33 +375,34 @@ def run_scan_process(
     org: str,
     username: str,
     password: str,
-    mode: str = "smoke",
-    is_random: bool = False,
-    conversation_mode: str = DEFAULT_CONVERSATION_MODE,
+    mode: str = "standard",
+    is_random: bool | None = None,
+    conversation_mode: str | None = DEFAULT_CONVERSATION_MODE,
+    scan_overrides: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     try:
-        normalized_conversation_mode = normalize_conversation_mode(conversation_mode)
-        if mode not in SCAN_CONFIG:
-            raise ValueError(f"Unsupported scan mode: {mode}")
-        conf = SCAN_CONFIG[mode]
-        interval = conf["interval"]
-        total_limit = conf["limit"]
-        rounds = conf.get("rounds", 1)
+        if conversation_mode:
+            normalize_conversation_mode(conversation_mode)
 
-        prompts = get_weighted_prompts(total_limit, is_random, mode)
+        scan_settings = build_scan_settings(
+            mode=mode,
+            overrides=scan_overrides,
+            conversation_mode=conversation_mode,
+            shuffle_enabled=is_random,
+        )
+        interval = DEFAULT_INTERVAL_SECONDS
+        rounds = int(scan_settings["rounds"])
+        conversation_mode_summary = summarize_conversation_mode(
+            scan_settings["conversation_mode_distribution"]
+        )
+
+        prompt_metadata = maybe_shuffle_cases(
+            build_scan_cases(scan_settings),
+            scan_settings.get("seed"),
+            bool(scan_settings["shuffle_enabled"]),
+        )
         timestamp = int(time.time())
-        log_dir = ensure_log_dir(mode, normalized_conversation_mode, timestamp)
-
-        prompt_metadata = [
-            {
-                "id": f"{mode}-{idx + 1}",
-                "prompt": entry["prompt"],
-                "category": entry["category"],
-                "set_type": entry.get("set_type"),
-                "conversation_mode": normalized_conversation_mode,
-            }
-            for idx, entry in enumerate(prompts)
-        ]
+        log_dir = ensure_log_dir(scan_settings["mode"], conversation_mode_summary, timestamp)
 
         per_prompt_history: Dict[str, List[Dict[str, Any]]] = {
             meta["id"]: [] for meta in prompt_metadata
@@ -303,7 +423,7 @@ def run_scan_process(
                     try:
                         response = driver.send_prompt(
                             prompt_text,
-                            conversation_mode=normalized_conversation_mode,
+                            conversation_mode=meta["conversation_mode"],
                         )
                         if not response:
                             error_streak += 1
@@ -336,7 +456,7 @@ def run_scan_process(
                         "prompt": prompt_text,
                         "category": meta["category"],
                         "set_type": meta.get("set_type"),
-                        "conversation_mode": normalized_conversation_mode,
+                        "conversation_mode": meta["conversation_mode"],
                         "round": round_number,
                         "status": entry_status,
                         "response": entry_response,
@@ -361,18 +481,27 @@ def run_scan_process(
         aggregated_results = build_aggregated_results(per_prompt_history, prompt_metadata)
         summary_json, summary_csv = write_summary_files(
             log_dir,
-            mode,
-            normalized_conversation_mode,
-            rounds,
+            scan_settings,
             aggregated_results,
         )
 
         if aggregated_results:
-            report_path = log_dir / f"scan_report_{mode}_{timestamp}.pdf"
+            report_path = log_dir / f"scan_report_{scan_settings['mode']}_{timestamp}.pdf"
             generate_report(aggregated_results, str(report_path))
             return {
                 "status": "completed",
-                "conversation_mode": normalized_conversation_mode,
+                "mode": scan_settings["mode"],
+                "requested_mode": scan_settings["requested_mode"],
+                "conversation_mode": conversation_mode_summary,
+                "conversation_mode_distribution": scan_settings["conversation_mode_distribution"],
+                "scan_settings": {
+                    "total_limit": scan_settings["total_limit"],
+                    "rounds": scan_settings["rounds"],
+                    "variants_per_base": scan_settings["variants_per_base"],
+                    "category_distribution": scan_settings["category_distribution"],
+                    "shuffle_enabled": scan_settings["shuffle_enabled"],
+                    "seed": scan_settings.get("seed"),
+                },
                 "report_file": str(report_path),
                 "summary_json": str(summary_json),
                 "summary_csv": str(summary_csv),

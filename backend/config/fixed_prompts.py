@@ -8,9 +8,18 @@ SET_TYPE_REPRESENTATIVE = "representative"
 SET_TYPE_HIGH_RISK = "high_risk"
 SET_TYPE_STABILITY = "stability"
 
-PROMPT_DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "prompts"
+PROMPT_DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "prompts"
+PROMPT_VARIANT_DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "prompt_variants"
 
 SCAN_MODE_SET_TYPES = {
+    "test": (SET_TYPE_REPRESENTATIVE,),
+    "light": (SET_TYPE_REPRESENTATIVE,),
+    "standard": (SET_TYPE_REPRESENTATIVE, SET_TYPE_HIGH_RISK),
+    "full": (
+        SET_TYPE_REPRESENTATIVE,
+        SET_TYPE_HIGH_RISK,
+        SET_TYPE_STABILITY,
+    ),
     "smoke": (SET_TYPE_REPRESENTATIVE,),
     "risk_discovery": (SET_TYPE_REPRESENTATIVE, SET_TYPE_HIGH_RISK),
     "stability_audit": (SET_TYPE_STABILITY,),
@@ -44,15 +53,18 @@ def normalize_prompt_entry(raw_entry, source_mode: str, source_index: int):
         "set_type": set_type,
         "source_mode": str(raw_entry.get("source_mode") or source_mode).strip(),
         "source_index": source_index,
+        "source_id": str(raw_entry.get("source_id") or f"{source_mode}_{source_index}").strip(),
+        "base_source_id": str(raw_entry.get("base_source_id") or "").strip() or None,
+        "variant_type": str(raw_entry.get("variant_type") or "").strip() or None,
     }
 
 
-def load_external_prompt_catalog():
-    if not PROMPT_DATA_DIR.exists():
+def load_external_prompt_catalog(data_dir: Path):
+    if not data_dir.exists():
         return []
 
     catalog = []
-    for path in sorted(PROMPT_DATA_DIR.glob("*")):
+    for path in sorted(data_dir.glob("*")):
         if path.suffix == ".json":
             payload = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(payload, dict):
@@ -89,7 +101,7 @@ def load_external_prompt_catalog():
 
 
 def build_prompt_catalog():
-    external_catalog = load_external_prompt_catalog()
+    external_catalog = load_external_prompt_catalog(PROMPT_DATA_DIR)
     if external_catalog:
         return external_catalog
 
@@ -97,6 +109,7 @@ def build_prompt_catalog():
 
 
 PROMPT_CATALOG = build_prompt_catalog()
+PROMPT_VARIANT_CATALOG = load_external_prompt_catalog(PROMPT_VARIANT_DATA_DIR)
 
 
 def get_scan_mode_set_types(scan_mode: str):
@@ -129,3 +142,28 @@ def get_prompt_entries_for_mode(scan_mode: str, limit=None):
     if not set_types:
         raise ValueError(f"Unsupported scan mode: {scan_mode}")
     return get_prompt_entries(set_types=set_types, limit=limit)
+
+
+def get_prompt_variants(categories=None, set_types=None, base_source_ids=None, limit=None):
+    entries = PROMPT_VARIANT_CATALOG
+
+    if categories:
+        category_set = set(categories)
+        entries = [entry for entry in entries if entry["category"] in category_set]
+
+    if set_types:
+        set_type_set = set(set_types)
+        entries = [entry for entry in entries if entry["set_type"] in set_type_set]
+
+    if base_source_ids:
+        base_source_id_set = set(base_source_ids)
+        entries = [
+            entry
+            for entry in entries
+            if entry.get("base_source_id") in base_source_id_set
+        ]
+
+    if limit is not None:
+        return entries[:limit]
+
+    return entries

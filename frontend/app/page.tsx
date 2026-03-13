@@ -1,23 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type ScanStatus = "idle" | "loading" | "success" | "error";
-
 type JobState = "queued" | "running" | "completed" | "failed";
+type Distribution = Record<string, number>;
+
+type ScanSettings = {
+  total_limit: number;
+  rounds: number;
+  variants_per_base: number;
+  category_distribution: Distribution;
+  conversation_mode_distribution: Distribution;
+  shuffle_enabled: boolean;
+  seed: number | null;
+};
+
+type PresetOption = {
+  key: string;
+  label: string;
+  description: string;
+  recommended: boolean;
+  settings: ScanSettings;
+};
+
+type ScanOptionsResponse = {
+  default_mode: string;
+  modes: PresetOption[];
+  category_labels: Record<string, string>;
+  conversation_mode_labels: Record<string, string>;
+};
 
 type ScanResponse = {
   status: string;
   job_id: string;
   mode: string;
+  requested_mode?: string;
   is_random: boolean;
-  conversation_mode: string;
+  conversation_mode?: string | null;
 };
 
 type ScanJobResult = {
   status: JobState | string;
   job_id: string;
   mode?: string;
+  requested_mode?: string;
   is_random?: boolean;
   conversation_mode?: string;
   created_at?: string;
@@ -36,17 +63,39 @@ type ScanJobResult = {
   };
 };
 
+const API_BASE = "http://127.0.0.1:8000";
+
+const cloneSettings = (settings: ScanSettings): ScanSettings => ({
+  total_limit: settings.total_limit,
+  rounds: settings.rounds,
+  variants_per_base: settings.variants_per_base,
+  category_distribution: { ...settings.category_distribution },
+  conversation_mode_distribution: {
+    ...settings.conversation_mode_distribution,
+  },
+  shuffle_enabled: settings.shuffle_enabled,
+  seed: settings.seed,
+});
+
+const sumDistribution = (distribution: Distribution) =>
+  Object.values(distribution).reduce((total, value) => total + value, 0);
+
+const settingsEqual = (left: ScanSettings, right: ScanSettings) =>
+  JSON.stringify(left) === JSON.stringify(right);
+
 export default function Home() {
   const [formData, setFormData] = useState({
     url: "https://ai-chat.third-scope.com/ts/chat",
     organization: "",
     username: "",
     password: "",
-    mode: "smoke",
-    is_random: false,
-    conversation_mode: "clean_chat",
+    mode: "",
   });
-
+  const [options, setOptions] = useState<ScanOptionsResponse | null>(null);
+  const [scanSettings, setScanSettings] = useState<ScanSettings | null>(null);
+  const [draftSettings, setDraftSettings] = useState<ScanSettings | null>(null);
+  const [isCustomSettings, setIsCustomSettings] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [status, setStatus] = useState<ScanStatus>("idle");
   const [message, setMessage] = useState("");
   const [jobId, setJobId] = useState("");
@@ -58,17 +107,112 @@ export default function Home() {
     log_dir?: string;
   }>({});
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    const { name, value, type } = e.target;
-    const val =
-      type === "checkbox" ? (e.target as HTMLInputElement).checked : value;
+  const selectedPreset =
+    options?.modes.find((preset) => preset.key === formData.mode) ?? null;
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: val,
-    }));
+  useEffect(() => {
+    const loadOptions = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/scan/options`);
+        const data: ScanOptionsResponse = await res.json();
+        if (!res.ok) {
+          throw new Error("failed");
+        }
+
+        const defaultPreset =
+          data.modes.find((preset) => preset.key === data.default_mode) ??
+          data.modes[0];
+
+        setOptions(data);
+        if (defaultPreset) {
+          setFormData((prev) => ({ ...prev, mode: defaultPreset.key }));
+          setScanSettings(cloneSettings(defaultPreset.settings));
+        }
+      } catch (error) {
+        console.error(error);
+        setStatus("error");
+        setMessage("スキャン設定の読み込みに失敗しました");
+      }
+    };
+
+    loadOptions();
+  }, []);
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handlePresetSelect = (preset: PresetOption) => {
+    setFormData((prev) => ({ ...prev, mode: preset.key }));
+    setScanSettings(cloneSettings(preset.settings));
+    setIsCustomSettings(false);
+  };
+
+  const openSettingsModal = () => {
+    if (!scanSettings) {
+      return;
+    }
+    setDraftSettings(cloneSettings(scanSettings));
+    setIsSettingsOpen(true);
+  };
+
+  const closeSettingsModal = () => {
+    setIsSettingsOpen(false);
+    setDraftSettings(null);
+  };
+
+  const updateDraftNumber = (
+    key: "total_limit" | "rounds" | "variants_per_base",
+    value: string
+  ) => {
+    setDraftSettings((prev) =>
+      prev
+        ? {
+            ...prev,
+            [key]: Math.max(1, Number(value) || 1),
+          }
+        : prev
+    );
+  };
+
+  const updateDraftDistribution = (
+    section: "category_distribution" | "conversation_mode_distribution",
+    key: string,
+    value: string
+  ) => {
+    setDraftSettings((prev) =>
+      prev
+        ? {
+            ...prev,
+            [section]: {
+              ...prev[section],
+              [key]: Math.max(0, Number(value) || 0),
+            },
+          }
+        : prev
+    );
+  };
+
+  const saveSettings = () => {
+    if (!draftSettings || !selectedPreset) {
+      return;
+    }
+
+    const categoryTotal = sumDistribution(draftSettings.category_distribution);
+    const modeTotal = sumDistribution(
+      draftSettings.conversation_mode_distribution
+    );
+
+    if (categoryTotal !== 100 || modeTotal !== 100) {
+      setMessage("割合の合計を100%にしてください");
+      setStatus("error");
+      return;
+    }
+
+    setScanSettings(cloneSettings(draftSettings));
+    setIsCustomSettings(!settingsEqual(draftSettings, selectedPreset.settings));
+    closeSettingsModal();
   };
 
   const pollScanStatus = async (scanJobId: string) => {
@@ -77,12 +221,12 @@ export default function Home() {
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/scan/${scanJobId}`);
+        const res = await fetch(`${API_BASE}/api/scan/${scanJobId}`);
         const data: ScanJobResult = await res.json();
 
         if (!res.ok) {
           setStatus("error");
-          setMessage(data?.status || "failed to fetch scan result");
+          setMessage(data?.status || "スキャン結果の取得に失敗しました");
           return;
         }
 
@@ -90,7 +234,7 @@ export default function Home() {
         if (currentStatus === "queued" || currentStatus === "running") {
           setJobStatus(currentStatus as JobState);
           setMessage(
-            `scan in progress...\nJob ID: ${scanJobId}\nStatus: ${currentStatus}`
+            `スキャンを実行中です\nジョブID: ${scanJobId}\n状態: ${currentStatus}`
           );
           await new Promise((resolve) => setTimeout(resolve, intervalMs));
           continue;
@@ -110,14 +254,16 @@ export default function Home() {
             report_file: reportFile,
             log_dir: logDir,
           });
-          setMessage(`scan completed\nJob ID: ${scanJobId}\nStatus: completed`);
+          setMessage(
+            `スキャンが完了しました\nジョブID: ${scanJobId}\n状態: completed`
+          );
           return;
         }
 
         setJobStatus("failed");
         setStatus("error");
         setMessage(
-          `scan failed\nJob ID: ${scanJobId}\nStatus: ${currentStatus}`
+          `スキャンに失敗しました\nジョブID: ${scanJobId}\n状態: ${currentStatus}`
         );
         return;
       } catch (error) {
@@ -128,245 +274,548 @@ export default function Home() {
 
     setJobStatus("failed");
     setStatus("error");
-    setMessage(`scan polling timed out\nJob ID: ${scanJobId}`);
+    setMessage(
+      `スキャン結果の待機がタイムアウトしました\nジョブID: ${scanJobId}`
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!scanSettings || !formData.mode) {
+      return;
+    }
+
+    const categoryTotal = sumDistribution(scanSettings.category_distribution);
+    const modeTotal = sumDistribution(
+      scanSettings.conversation_mode_distribution
+    );
+    if (categoryTotal !== 100 || modeTotal !== 100) {
+      setStatus("error");
+      setMessage("割合の合計を100%にしてください");
+      return;
+    }
+
     setStatus("loading");
     setJobStatus("queued");
     setJobId("");
     setResultLinks({});
-    setMessage("scan request submitted...");
+    setMessage("スキャンを開始しています...");
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/scan", {
+      const res = await fetch(`${API_BASE}/api/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          is_random: scanSettings.shuffle_enabled,
+          total_limit: scanSettings.total_limit,
+          rounds: scanSettings.rounds,
+          variants_per_base: scanSettings.variants_per_base,
+          category_distribution: scanSettings.category_distribution,
+          conversation_mode_distribution:
+            scanSettings.conversation_mode_distribution,
+          shuffle_enabled: scanSettings.shuffle_enabled,
+          seed: scanSettings.seed,
+        }),
       });
 
       const data: ScanResponse = await res.json();
 
       if (!res.ok) {
         setStatus("error");
-        setMessage("request failed");
+        setMessage("スキャン開始に失敗しました");
         return;
       }
 
       setJobId(data.job_id);
       setMessage(
-        `scan accepted\nJob ID: ${data.job_id}\nMode: ${
-          data.mode || formData.mode
-        }\nConversation Mode: ${
-          data.conversation_mode || formData.conversation_mode
-        }\nPrompt Source: ${
-          formData.is_random ? "Category Sample" : "Benchmark Set"
-        }\nStatus: queued`
+        `スキャンを受け付けました\nジョブID: ${data.job_id}\nモード: ${
+          selectedPreset?.label ?? formData.mode
+        }${isCustomSettings ? "（カスタム設定）" : ""}\n状態: queued`
       );
 
       await pollScanStatus(data.job_id);
     } catch (error) {
-      setStatus("error");
-      setMessage("connection failed");
       console.error(error);
+      setStatus("error");
+      setMessage("バックエンドへ接続できませんでした");
     }
   };
 
+  if (!options || !scanSettings) {
+    return (
+      <main className="min-h-screen bg-stone-100 flex items-center justify-center p-6 text-stone-900">
+        <div className="w-full max-w-xl rounded-3xl border border-stone-200 bg-white p-8 shadow-sm">
+          設定を読み込んでいます...
+        </div>
+      </main>
+    );
+  }
+
+  const draftCategoryTotal = draftSettings
+    ? sumDistribution(draftSettings.category_distribution)
+    : 0;
+  const draftConversationTotal = draftSettings
+    ? sumDistribution(draftSettings.conversation_mode_distribution)
+    : 0;
+
   return (
-    <main className="min-h-screen bg-gray-50 flex items-center justify-center p-6 text-black">
-      <div className="max-w-xl w-full bg-white rounded-xl shadow-lg p-8 border border-gray-100">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">
-          AI Security Scanner
-        </h1>
+    <main className="min-h-screen bg-stone-100 p-6 text-stone-900">
+      <div className="mx-auto max-w-5xl">
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <section className="rounded-[28px] border border-stone-200 bg-white p-8 shadow-sm">
+            <h1 className="text-3xl font-bold tracking-tight">
+              Auto-Injection-Check
+            </h1>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Target URL
-              </label>
-              <input
-                type="text"
-                name="url"
-                value={formData.url}
-                onChange={handleChange}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Organization ID
-              </label>
-              <input
-                type="text"
-                name="organization"
-                value={formData.organization}
-                onChange={handleChange}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <input
-                type="text"
-                name="username"
-                placeholder="Username"
-                value={formData.username}
-                onChange={handleChange}
-                className="w-full p-2 border border-gray-300 rounded-md"
-                required
-              />
-              <input
-                type="password"
-                name="password"
-                placeholder="Password"
-                value={formData.password}
-                onChange={handleChange}
-                className="w-full p-2 border border-gray-300 rounded-md"
-                required
-              />
-            </div>
-          </div>
+            <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-sm font-medium text-stone-700">
+                    URL
+                  </label>
+                  <input
+                    type="text"
+                    name="url"
+                    value={formData.url}
+                    onChange={handleTextChange}
+                    className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-amber-500"
+                    required
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-sm font-medium text-stone-700">
+                    組織ID
+                  </label>
+                  <input
+                    type="text"
+                    name="organization"
+                    value={formData.organization}
+                    onChange={handleTextChange}
+                    className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-amber-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-stone-700">
+                    ユーザー名
+                  </label>
+                  <input
+                    type="text"
+                    name="username"
+                    value={formData.username}
+                    onChange={handleTextChange}
+                    className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-amber-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-stone-700">
+                    パスワード
+                  </label>
+                  <input
+                    type="password"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleTextChange}
+                    className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-amber-500"
+                    required
+                  />
+                </div>
+              </div>
 
-          <hr className="border-gray-100" />
+              <div className="rounded-[24px] border border-stone-200 bg-stone-50 p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-semibold text-stone-800">
+                      スキャンの種類
+                    </h2>
+                    <p className="text-xs text-stone-500">
+                      初めて使う場合は「標準スキャン」がおすすめです。
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openSettingsModal}
+                    className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
+                  >
+                    詳細設定
+                  </button>
+                </div>
 
-          <div className="bg-gray-50 p-4 rounded-lg space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Scan Mode
-              </label>
-              <select
-                name="mode"
-                value={formData.mode}
-                onChange={handleChange}
-                className="w-full p-2 border border-gray-300 rounded-md bg-white"
+                <div className="mt-4 grid gap-3">
+                  {options.modes.map((preset) => {
+                    const selected = formData.mode === preset.key;
+                    return (
+                      <button
+                        key={preset.key}
+                        type="button"
+                        onClick={() => handlePresetSelect(preset)}
+                        className={`rounded-3xl border p-5 text-left transition ${
+                          selected
+                            ? "border-amber-500 bg-amber-50"
+                            : "border-stone-200 bg-white hover:border-stone-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-semibold">
+                            {preset.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm text-stone-600">
+                          {preset.description}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={status === "loading"}
+                className={`w-full rounded-2xl px-5 py-4 text-base font-semibold text-white transition ${
+                  status === "loading"
+                    ? "cursor-not-allowed bg-stone-400"
+                    : "bg-stone-900 hover:bg-stone-800"
+                }`}
               >
-                <option value="smoke">Smoke (representative)</option>
-                <option value="risk_discovery">
-                  Risk Discovery (representative + high_risk)
-                </option>
-                <option value="stability_audit">
-                  Stability Audit (stability)
-                </option>
-                <option value="full_assessment">Full Assessment (all)</option>
-              </select>
+                {status === "loading"
+                  ? "スキャンを実行中..."
+                  : "この設定でスキャンを実行"}
+              </button>
+            </form>
+          </section>
+
+          <aside className="rounded-[28px] border border-stone-200 bg-white p-8 shadow-sm">
+            <h2 className="text-lg font-semibold">現在の設定</h2>
+            <div className="mt-4 space-y-4 text-sm">
+              <div className="rounded-2xl bg-stone-50 p-4">
+                <div className="font-medium text-stone-800">
+                  {selectedPreset?.label}
+                  {isCustomSettings ? "（カスタム設定）" : ""}
+                </div>
+                <div className="mt-1 text-stone-600">
+                  {selectedPreset?.description}
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-stone-200 p-4">
+                  <div className="text-stone-500">総テスト数</div>
+                  <div className="mt-1 text-xl font-semibold">
+                    {scanSettings.total_limit}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-stone-200 p-4">
+                  <div className="text-stone-500">実行回数</div>
+                  <div className="mt-1 text-xl font-semibold">
+                    {scanSettings.rounds}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-stone-200 p-4">
+                  <div className="text-stone-500">攻撃パターン</div>
+                  <div className="mt-1 text-xl font-semibold">
+                    {scanSettings.variants_per_base}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-stone-200 p-4">
+                  <div className="text-stone-500">実行順</div>
+                  <div className="mt-1 text-xl font-semibold">
+                    {scanSettings.shuffle_enabled ? "ランダム" : "固定順"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-stone-200 p-4">
+                <div className="font-medium text-stone-800">
+                  攻撃カテゴリの割合
+                </div>
+                <div className="mt-3 space-y-2">
+                  {Object.entries(options.category_labels).map(
+                    ([key, label]) => (
+                      <div
+                        key={key}
+                        className="flex items-center justify-between"
+                      >
+                        <span>{label}</span>
+                        <span>{scanSettings.category_distribution[key]}%</span>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-stone-200 p-4">
+                <div className="font-medium text-stone-800">
+                  会話モードの割合
+                </div>
+                <div className="mt-3 space-y-2">
+                  {Object.entries(options.conversation_mode_labels).map(
+                    ([key, label]) => (
+                      <div
+                        key={key}
+                        className="flex items-center justify-between"
+                      >
+                        <span>{label}</span>
+                        <span>
+                          {scanSettings.conversation_mode_distribution[key]}%
+                        </span>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Conversation Mode
-              </label>
-              <select
-                name="conversation_mode"
-                value={formData.conversation_mode}
-                onChange={handleChange}
-                className="w-full p-2 border border-gray-300 rounded-md bg-white"
+            {message && (
+              <div
+                className={`mt-6 rounded-2xl border p-4 whitespace-pre-line text-sm ${
+                  status === "success"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : status === "error"
+                    ? "border-rose-200 bg-rose-50 text-rose-800"
+                    : "border-sky-200 bg-sky-50 text-sky-800"
+                }`}
               >
-                <option value="clean_chat">Clean Chat</option>
-                <option value="conversational">Conversational</option>
-              </select>
-            </div>
+                {message}
+              </div>
+            )}
 
-            <div className="flex items-center justify-between">
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-gray-700">
-                  Prompt Source
-                </span>
-                <p className="text-xs text-gray-400">
-                  Off = Benchmark Set / On = Category Sample
+            {jobId && (
+              <div className="mt-4 text-xs text-stone-500">
+                ジョブID: {jobId}
+                <br />
+                状態: {jobStatus || "queued"}
+              </div>
+            )}
+
+            {(resultLinks.report_file ||
+              resultLinks.summary_json ||
+              resultLinks.summary_csv) && (
+              <div className="mt-6 rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                <h3 className="text-sm font-semibold text-stone-800">
+                  出力ファイル
+                </h3>
+                <div className="mt-3 space-y-2 text-sm text-stone-700">
+                  {resultLinks.report_file && (
+                    <div>PDF: {resultLinks.report_file}</div>
+                  )}
+                  {resultLinks.summary_json && (
+                    <div>JSON: {resultLinks.summary_json}</div>
+                  )}
+                  {resultLinks.summary_csv && (
+                    <div>CSV: {resultLinks.summary_csv}</div>
+                  )}
+                  {resultLinks.log_dir && (
+                    <div>ログ: {resultLinks.log_dir}</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </aside>
+        </div>
+      </div>
+
+      {isSettingsOpen && draftSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/40 p-4">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[28px] bg-white p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold">詳細設定</h2>
+                <p className="mt-1 text-sm text-stone-600">
+                  現在選択中のプリセット内容を確認し、必要なら調整できます。
                 </p>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
+              <button
+                type="button"
+                onClick={closeSettingsModal}
+                className="rounded-full border border-stone-300 px-3 py-1 text-sm text-stone-600"
+              >
+                閉じる
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              <label className="block rounded-2xl border border-stone-200 p-4">
+                <span className="text-sm font-medium text-stone-700">
+                  総テスト数
+                </span>
                 <input
-                  type="checkbox"
-                  name="is_random"
-                  checked={formData.is_random}
-                  onChange={handleChange}
-                  className="sr-only peer"
+                  type="number"
+                  min={1}
+                  value={draftSettings.total_limit}
+                  onChange={(e) =>
+                    updateDraftNumber("total_limit", e.target.value)
+                  }
+                  className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-2"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600" />
+              </label>
+              <label className="block rounded-2xl border border-stone-200 p-4">
+                <span className="text-sm font-medium text-stone-700">
+                  実行回数
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  value={draftSettings.rounds}
+                  onChange={(e) => updateDraftNumber("rounds", e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-2"
+                />
+              </label>
+              <label className="block rounded-2xl border border-stone-200 p-4">
+                <span className="text-sm font-medium text-stone-700">
+                  攻撃パターン
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  value={draftSettings.variants_per_base}
+                  onChange={(e) =>
+                    updateDraftNumber("variants_per_base", e.target.value)
+                  }
+                  className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-2"
+                />
               </label>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={status === "loading"}
-            className={`w-full py-3 px-4 rounded-md text-white font-bold transition-all ${
-              status === "loading"
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-700 shadow-md active:scale-[0.98]"
-            }`}
-          >
-            {status === "loading" ? "processing..." : "Start Security Scan"}
-          </button>
-        </form>
+            <div className="mt-4 rounded-2xl border border-stone-200 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-stone-800">
+                    攻撃カテゴリの割合
+                  </div>
+                  <div className="text-xs text-stone-500">
+                    合計 {draftCategoryTotal}% / 100%
+                  </div>
+                </div>
+                <div
+                  className={`text-sm font-medium ${
+                    draftCategoryTotal === 100
+                      ? "text-emerald-700"
+                      : "text-rose-700"
+                  }`}
+                >
+                  {draftCategoryTotal === 100 ? "OK" : "要調整"}
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {Object.entries(options.category_labels).map(([key, label]) => (
+                  <label key={key} className="block">
+                    <span className="mb-1 block text-sm text-stone-700">
+                      {label}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={draftSettings.category_distribution[key]}
+                        onChange={(e) =>
+                          updateDraftDistribution(
+                            "category_distribution",
+                            key,
+                            e.target.value
+                          )
+                        }
+                        className="w-full rounded-xl border border-stone-300 px-3 py-2"
+                      />
+                      <span className="text-sm text-stone-500">%</span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
 
-        {message && (
-          <div
-            className={`mt-6 p-4 rounded-md whitespace-pre-line text-sm ${
-              status === "success"
-                ? "bg-green-50 text-green-800 border border-green-200"
-                : status === "error"
-                ? "bg-red-50 text-red-800 border border-red-200"
-                : "bg-blue-50 text-blue-800"
-            }`}
-          >
-            {message}
-          </div>
-        )}
+            <div className="mt-4 rounded-2xl border border-stone-200 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-stone-800">
+                    会話モードの割合
+                  </div>
+                  <div className="text-xs text-stone-500">
+                    合計 {draftConversationTotal}% / 100%
+                  </div>
+                </div>
+                <div
+                  className={`text-sm font-medium ${
+                    draftConversationTotal === 100
+                      ? "text-emerald-700"
+                      : "text-rose-700"
+                  }`}
+                >
+                  {draftConversationTotal === 100 ? "OK" : "要調整"}
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {Object.entries(options.conversation_mode_labels).map(
+                  ([key, label]) => (
+                    <label key={key} className="block">
+                      <span className="mb-1 block text-sm text-stone-700">
+                        {label}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          value={
+                            draftSettings.conversation_mode_distribution[key]
+                          }
+                          onChange={(e) =>
+                            updateDraftDistribution(
+                              "conversation_mode_distribution",
+                              key,
+                              e.target.value
+                            )
+                          }
+                          className="w-full rounded-xl border border-stone-300 px-3 py-2"
+                        />
+                        <span className="text-sm text-stone-500">%</span>
+                      </div>
+                    </label>
+                  )
+                )}
+              </div>
+            </div>
 
-        {jobId && (
-          <div className="mt-4 text-xs text-gray-500">
-            <div>Job ID: {jobId}</div>
-            <div>Status: {jobStatus || "queued"}</div>
-          </div>
-        )}
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <label className="flex items-center justify-between rounded-2xl border border-stone-200 p-4">
+                <span className="text-sm font-medium text-stone-700">
+                  実行順をランダムにする
+                </span>
+                <input
+                  type="checkbox"
+                  checked={draftSettings.shuffle_enabled}
+                  onChange={(e) =>
+                    setDraftSettings((prev) =>
+                      prev
+                        ? { ...prev, shuffle_enabled: e.target.checked }
+                        : prev
+                    )
+                  }
+                  className="h-4 w-4"
+                />
+              </label>
+            </div>
 
-        {(resultLinks.report_file ||
-          resultLinks.summary_json ||
-          resultLinks.summary_csv) && (
-          <div className="mt-6 rounded-md border border-gray-200 p-4 bg-gray-50">
-            <h2 className="text-sm font-semibold text-gray-800 mb-3">
-              Scan Results
-            </h2>
-            <div className="space-y-2 text-sm">
-              {resultLinks.report_file && (
-                <div>
-                  <span className="font-medium">PDF Report:</span>{" "}
-                  <span className="text-gray-700">
-                    {resultLinks.report_file}
-                  </span>
-                </div>
-              )}
-              {resultLinks.summary_json && (
-                <div>
-                  <span className="font-medium">Summary JSON:</span>{" "}
-                  <span className="text-gray-700">
-                    {resultLinks.summary_json}
-                  </span>
-                </div>
-              )}
-              {resultLinks.summary_csv && (
-                <div>
-                  <span className="font-medium">Summary CSV:</span>{" "}
-                  <span className="text-gray-700">
-                    {resultLinks.summary_csv}
-                  </span>
-                </div>
-              )}
-              {resultLinks.log_dir && (
-                <div>
-                  <span className="font-medium">Log Dir:</span>{" "}
-                  <span className="text-gray-700">{resultLinks.log_dir}</span>
-                </div>
-              )}
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeSettingsModal}
+                className="rounded-2xl border border-stone-300 px-5 py-3 text-sm font-medium text-stone-700"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={saveSettings}
+                className="rounded-2xl bg-stone-900 px-5 py-3 text-sm font-medium text-white"
+              >
+                この設定を反映する
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </main>
   );
 }
