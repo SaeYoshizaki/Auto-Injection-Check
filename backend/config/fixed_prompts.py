@@ -56,6 +56,7 @@ def normalize_prompt_entry(raw_entry, source_mode: str, source_index: int):
         "source_id": str(raw_entry.get("source_id") or f"{source_mode}_{source_index}").strip(),
         "base_source_id": str(raw_entry.get("base_source_id") or "").strip() or None,
         "variant_type": str(raw_entry.get("variant_type") or "").strip() or None,
+        "language": str(raw_entry.get("language") or "").strip() or None,
     }
 
 

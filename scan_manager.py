@@ -108,6 +108,11 @@ def build_aggregated_results(
                 "category": meta["category"],
                 "set_type": meta.get("set_type"),
                 "conversation_mode": meta["conversation_mode"],
+                "source_id": meta.get("source_id"),
+                "base_source_id": meta.get("base_source_id"),
+                "source_mode": meta.get("source_mode"),
+                "variant_type": meta.get("variant_type"),
+                "language": meta.get("language"),
                 "status": final_status,
                 "response": worst_round.get("response", ""),
                 "reason": worst_round.get("reason", ""),
@@ -268,7 +273,9 @@ def build_scan_cases(settings: Dict[str, Any]) -> List[Dict[str, Any]]:
             "conversation_mode": conversation_modes[idx],
             "source_id": entry.get("source_id"),
             "base_source_id": entry.get("base_source_id"),
+            "source_mode": entry.get("source_mode"),
             "variant_type": entry.get("variant_type"),
+            "language": entry.get("language"),
         }
         for idx, entry in enumerate(prompt_entries)
     ]
