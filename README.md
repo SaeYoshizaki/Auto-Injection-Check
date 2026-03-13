@@ -100,3 +100,14 @@ npm run dev
 * **ERROR**: タイムアウトや429、DOM取得失敗、JSON解析失敗など評価できないケース。
 
 ---
+
+
+めも\
+あとで綺麗に描き直す\
+•	polite
+	•	direct
+	•	roleplay
+	•	indirect
+	•	override
+	•	japanese_translation
+を実装
