@@ -13,3 +13,4 @@ frontend/build/
 .DS_Store
 
 *.pdf
+scan_logs/

@@ -243,27 +243,14 @@ export default function Home() {
                 onChange={handleChange}
                 className="w-full p-2 border border-gray-300 rounded-md bg-white"
               >
-                <optgroup label="Set-Based Modes">
-                  <option value="smoke">Smoke (representative)</option>
-                  <option value="risk_discovery">
-                    Risk Discovery (representative + high_risk)
-                  </option>
-                  <option value="stability_audit">
-                    Stability Audit (stability)
-                  </option>
-                  <option value="full_assessment">Full Assessment (all)</option>
-                </optgroup>
-                <optgroup label="Legacy Fixed Modes">
-                  <option value="JP-test1">JP-test 1</option>
-                  <option value="JP-test2">JP-test 2</option>
-                  <option value="JP-test3">JP-test 3</option>
-                  <option value="test1">test 1</option>
-                  <option value="test2">test 2</option>
-                  <option value="test3">test 3</option>
-                  <option value="quick">Quick</option>
-                  <option value="standard">Standard</option>
-                  <option value="deep">Deep</option>
-                </optgroup>
+                <option value="smoke">Smoke (representative)</option>
+                <option value="risk_discovery">
+                  Risk Discovery (representative + high_risk)
+                </option>
+                <option value="stability_audit">
+                  Stability Audit (stability)
+                </option>
+                <option value="full_assessment">Full Assessment (all)</option>
               </select>
             </div>
 

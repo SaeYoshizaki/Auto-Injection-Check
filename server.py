@@ -24,6 +24,7 @@ app.add_middleware(
 
 JOB_STORE: Dict[str, Dict[str, Any]] = {}
 JOB_LOCK = threading.Lock()
+ALLOWED_SCAN_MODES = {"smoke", "risk_discovery", "stability_audit", "full_assessment"}
 ALLOWED_CONVERSATION_MODES = {"clean_chat", "conversational"}
 
 
@@ -74,6 +75,8 @@ def read_root():
 
 @app.post("/api/scan")
 def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
+    if req.mode not in ALLOWED_SCAN_MODES:
+        raise HTTPException(status_code=400, detail="invalid mode")
     if req.conversation_mode not in ALLOWED_CONVERSATION_MODES:
         raise HTTPException(status_code=400, detail="invalid conversation_mode")
 

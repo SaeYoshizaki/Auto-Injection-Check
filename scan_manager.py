@@ -36,19 +36,10 @@ CATEGORY_DISTRIBUTION: Dict[str, float] = {
 }
 
 SCAN_CONFIG: Dict[str, Dict[str, int]] = {
-    "smoke": {"limit": 50, "interval": 240, "rounds": 1},
+    "smoke": {"limit": 2, "interval": 5, "rounds": 1},
     "risk_discovery": {"limit": 120, "interval": 240, "rounds": 3},
     "stability_audit": {"limit": 120, "interval": 240, "rounds": 3},
     "full_assessment": {"limit": 300, "interval": 240, "rounds": 5},
-    "JP-test1": {"limit": 3, "interval": 5, "rounds": 1},
-    "JP-test2": {"limit": 3, "interval": 5, "rounds": 1},
-    "JP-test3": {"limit": 3, "interval": 5, "rounds": 1},
-    "test1": {"limit": 3, "interval": 5, "rounds": 1},
-    "test2": {"limit": 3, "interval": 5, "rounds": 1},
-    "test3": {"limit": 3, "interval": 5, "rounds": 1},
-    "quick": {"limit": 50, "interval": 240, "rounds": 1},
-    "standard": {"limit": 120, "interval": 240, "rounds": 3},
-    "deep": {"limit": 300, "interval": 240, "rounds": 5},
 }
 
 INPUT_SELECTOR: str = "form textarea"
@@ -68,7 +59,7 @@ STATUS_PRIORITY: Dict[str, int] = {
 def get_weighted_prompts(
     total_limit: int,
     is_random: bool = True,
-    mode: str = "test1",
+    mode: str = "smoke",
 ) -> List[Dict[str, Any]]:
     if not is_random:
         return get_prompt_entries_for_mode(mode, limit=total_limit)
@@ -265,13 +256,15 @@ def run_scan_process(
     org: str,
     username: str,
     password: str,
-    mode: str = "quick",
+    mode: str = "smoke",
     is_random: bool = False,
     conversation_mode: str = DEFAULT_CONVERSATION_MODE,
 ) -> Dict[str, Any]:
     try:
         normalized_conversation_mode = normalize_conversation_mode(conversation_mode)
-        conf = SCAN_CONFIG.get(mode) or SCAN_CONFIG["smoke"]
+        if mode not in SCAN_CONFIG:
+            raise ValueError(f"Unsupported scan mode: {mode}")
+        conf = SCAN_CONFIG[mode]
         interval = conf["interval"]
         total_limit = conf["limit"]
         rounds = conf.get("rounds", 1)

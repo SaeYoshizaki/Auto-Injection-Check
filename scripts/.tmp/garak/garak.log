@@ -1,0 +1,19 @@
+2026-03-13 11:27:45,967  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x1034d8f10>
+2026-03-13 11:27:46,202  DEBUG  langauge provision service: en,en
+2026-03-13 11:27:46,508  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x104a44a10>
+2026-03-13 11:27:46,509  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x10617ed50>
+2026-03-13 11:27:46,510  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x1034e40d0>
+2026-03-13 11:27:46,510  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x10617d1d0>
+2026-03-13 11:27:46,511  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x1064bb250>
+2026-03-13 11:27:46,511  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x1034d8f50>
+2026-03-13 11:27:46,511  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:27:46,515  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:27:46,517  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:27:46,520  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x1064cacd0>
+2026-03-13 11:27:46,521  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x1066049d0>
+2026-03-13 11:27:46,521  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x106604210>
+2026-03-13 11:27:46,521  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x106604950>
+2026-03-13 11:27:46,521  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:27:46,533  INFO  probe init: <garak.probes.divergence.Repeat object at 0x1064c8e90>
+2026-03-13 11:27:46,534  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x10660d410>
+2026-03-13 11:27:46,534  INFO  probe init: <garak.probes.glitch.Glitch object at 0x10662bc10>

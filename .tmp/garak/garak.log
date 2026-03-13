@@ -1,0 +1,380 @@
+2026-03-13 11:24:52,284  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x102716890>
+2026-03-13 11:24:52,658  DEBUG  langauge provision service: en,en
+2026-03-13 11:24:52,909  INFO  probe init: <garak.probes.goodside.Tag object at 0x103650450>
+2026-03-13 11:24:52,927  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x106419110>
+2026-03-13 11:24:52,928  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x1061c6a90>
+2026-03-13 11:24:52,929  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x105c1e890>
+2026-03-13 11:24:52,929  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x10350f0d0>
+2026-03-13 11:24:53,227  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x1064214d0>
+2026-03-13 11:24:53,227  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:24:53,231  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:24:53,234  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:24:53,237  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x1067d7250>
+2026-03-13 11:24:53,238  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x10680fe50>
+2026-03-13 11:24:53,238  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x10680f650>
+2026-03-13 11:24:53,239  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x10680da10>
+2026-03-13 11:24:53,239  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:24:53,466  INFO  probe init: <garak.probes.divergence.Repeat object at 0x10680e710>
+2026-03-13 11:24:53,466  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x106823950>
+2026-03-13 11:24:53,467  INFO  probe init: <garak.probes.glitch.Glitch object at 0x106821e10>
+2026-03-13 11:25:15,075  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x102e28f10>
+2026-03-13 11:25:15,075  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x1036e9310>
+2026-03-13 11:25:15,314  DEBUG  langauge provision service: en,en
+2026-03-13 11:25:15,314  DEBUG  langauge provision service: en,en
+2026-03-13 11:25:15,564  INFO  probe init: <garak.probes.goodside.Tag object at 0x104dac550>
+2026-03-13 11:25:15,565  INFO  probe init: <garak.probes.goodside.Tag object at 0x105438850>
+2026-03-13 11:25:15,578  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x105097390>
+2026-03-13 11:25:15,578  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x103561790>
+2026-03-13 11:25:15,579  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x103545a50>
+2026-03-13 11:25:15,579  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x103bd44d0>
+2026-03-13 11:25:15,580  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x103cf7e90>
+2026-03-13 11:25:15,580  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x1035c97d0>
+2026-03-13 11:25:15,581  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x103cb6690>
+2026-03-13 11:25:15,581  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x103545a50>
+2026-03-13 11:25:15,632  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x1055636d0>
+2026-03-13 11:25:15,633  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x105f16810>
+2026-03-13 11:25:15,633  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:25:15,633  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:25:15,637  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:25:15,637  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:25:15,639  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:25:15,639  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:25:15,643  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x105915550>
+2026-03-13 11:25:15,643  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x106c36f10>
+2026-03-13 11:25:15,643  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x10595c790>
+2026-03-13 11:25:15,643  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x106c37f50>
+2026-03-13 11:25:15,644  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x105945e10>
+2026-03-13 11:25:15,644  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x106c35310>
+2026-03-13 11:25:15,644  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x106c35fd0>
+2026-03-13 11:25:15,645  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x103bcc110>
+2026-03-13 11:25:15,645  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:25:15,645  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:25:15,657  INFO  probe init: <garak.probes.divergence.Repeat object at 0x105947d90>
+2026-03-13 11:25:15,657  INFO  probe init: <garak.probes.divergence.Repeat object at 0x106c54490>
+2026-03-13 11:25:15,657  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x1059915d0>
+2026-03-13 11:25:15,657  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x106c548d0>
+2026-03-13 11:25:15,658  INFO  probe init: <garak.probes.glitch.Glitch object at 0x105991610>
+2026-03-13 11:25:15,658  INFO  probe init: <garak.probes.glitch.Glitch object at 0x106c72e90>
+2026-03-13 11:26:02,586  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x105579350>
+2026-03-13 11:26:02,586  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x1033d5550>
+2026-03-13 11:26:02,834  DEBUG  langauge provision service: en,en
+2026-03-13 11:26:02,834  DEBUG  langauge provision service: en,en
+2026-03-13 11:26:03,142  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x1208c6b10>
+2026-03-13 11:26:03,143  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x1031c1910>
+2026-03-13 11:26:03,144  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x1208c6a90>
+2026-03-13 11:26:03,144  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x106882250>
+2026-03-13 11:26:03,145  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x105579250>
+2026-03-13 11:26:03,145  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x1068813d0>
+2026-03-13 11:26:03,145  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x120e93fd0>
+2026-03-13 11:26:03,146  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x106b6fdd0>
+2026-03-13 11:26:03,146  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x120ebb350>
+2026-03-13 11:26:03,146  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x106bb7c10>
+2026-03-13 11:26:03,147  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x106256b10>
+2026-03-13 11:26:03,147  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x120e92dd0>
+2026-03-13 11:26:03,147  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:26:03,147  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:26:03,151  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:26:03,151  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:26:03,154  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:26:03,154  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:26:03,157  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x106bce710>
+2026-03-13 11:26:03,157  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x120ed2e90>
+2026-03-13 11:26:03,158  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x120edc410>
+2026-03-13 11:26:03,158  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x106bdc990>
+2026-03-13 11:26:03,158  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x120ed24d0>
+2026-03-13 11:26:03,158  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x106b770d0>
+2026-03-13 11:26:03,159  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x120edc290>
+2026-03-13 11:26:03,159  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x106bdc050>
+2026-03-13 11:26:03,159  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:26:03,159  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:26:03,172  INFO  probe init: <garak.probes.divergence.Repeat object at 0x120ee4f90>
+2026-03-13 11:26:03,172  INFO  probe init: <garak.probes.divergence.Repeat object at 0x106bdee50>
+2026-03-13 11:26:03,172  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x120f0b810>
+2026-03-13 11:26:03,172  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x106c09cd0>
+2026-03-13 11:26:03,173  INFO  probe init: <garak.probes.glitch.Glitch object at 0x120edc290>
+2026-03-13 11:26:03,173  INFO  probe init: <garak.probes.glitch.Glitch object at 0x106c0a250>
+2026-03-13 11:28:24,550  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x100fa4d90>
+2026-03-13 11:28:24,886  DEBUG  langauge provision service: en,en
+2026-03-13 11:28:25,197  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x103cc7050>
+2026-03-13 11:28:25,198  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x10415a4d0>
+2026-03-13 11:28:25,199  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x101a05490>
+2026-03-13 11:28:25,199  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x101a04f90>
+2026-03-13 11:28:25,200  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x1041bb350>
+2026-03-13 11:28:25,200  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x10416e950>
+2026-03-13 11:28:25,200  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:28:25,204  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:28:25,206  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:28:25,209  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x1041c8cd0>
+2026-03-13 11:28:25,210  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x1041d6250>
+2026-03-13 11:28:25,210  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x1041d6090>
+2026-03-13 11:28:25,211  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x1041d58d0>
+2026-03-13 11:28:25,211  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:28:25,223  INFO  probe init: <garak.probes.divergence.Repeat object at 0x1041e4d10>
+2026-03-13 11:28:25,223  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x10420b910>
+2026-03-13 11:28:25,224  INFO  probe init: <garak.probes.glitch.Glitch object at 0x1041ca4d0>
+2026-03-13 11:29:45,141  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x1057b1510>
+2026-03-13 11:29:45,383  DEBUG  langauge provision service: en,en
+2026-03-13 11:29:45,694  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x104ebdbd0>
+2026-03-13 11:29:45,695  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x107993190>
+2026-03-13 11:29:45,695  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x1076c7150>
+2026-03-13 11:29:45,696  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x105c90ad0>
+2026-03-13 11:29:45,696  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x1079bafd0>
+2026-03-13 11:29:45,696  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x1057b1890>
+2026-03-13 11:29:45,697  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:29:45,700  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:29:45,702  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:29:45,705  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x1079d69d0>
+2026-03-13 11:29:45,706  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x1079e0990>
+2026-03-13 11:29:45,706  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x1079e0090>
+2026-03-13 11:29:45,707  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x1079e0050>
+2026-03-13 11:29:45,707  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:29:45,718  INFO  probe init: <garak.probes.divergence.Repeat object at 0x1079ed010>
+2026-03-13 11:29:45,718  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x1079ee850>
+2026-03-13 11:29:45,719  INFO  probe init: <garak.probes.glitch.Glitch object at 0x107a0bdd0>
+2026-03-13 11:35:07,193  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x105339650>
+2026-03-13 11:35:07,448  DEBUG  langauge provision service: en,en
+2026-03-13 11:35:07,761  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x10714b9d0>
+2026-03-13 11:35:07,762  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x1074fc1d0>
+2026-03-13 11:35:07,765  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x1074fd150>
+2026-03-13 11:35:07,767  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x1071ec050>
+2026-03-13 11:35:07,770  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x107547d90>
+2026-03-13 11:35:07,771  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x107084a50>
+2026-03-13 11:35:07,772  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:35:07,778  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:35:07,781  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:35:07,786  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x10755d390>
+2026-03-13 11:35:07,786  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x107704b90>
+2026-03-13 11:35:07,787  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x1077049d0>
+2026-03-13 11:35:07,787  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x107704310>
+2026-03-13 11:35:07,788  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:35:07,801  INFO  probe init: <garak.probes.divergence.Repeat object at 0x107704410>
+2026-03-13 11:35:07,802  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x107707550>
+2026-03-13 11:35:07,802  INFO  probe init: <garak.probes.glitch.Glitch object at 0x107732650>
+2026-03-13 11:36:14,934  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x1022e5310>
+2026-03-13 11:36:15,191  DEBUG  langauge provision service: en,en
+2026-03-13 11:36:15,498  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x104e14750>
+2026-03-13 11:36:15,499  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x104c946d0>
+2026-03-13 11:36:15,500  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x1051aec50>
+2026-03-13 11:36:15,501  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x1051aedd0>
+2026-03-13 11:36:15,501  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x1051f9210>
+2026-03-13 11:36:15,502  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x1033f6fd0>
+2026-03-13 11:36:15,502  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:36:15,506  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:36:15,509  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:36:15,512  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x1051fa4d0>
+2026-03-13 11:36:15,513  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x10520ec10>
+2026-03-13 11:36:15,513  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x10520e290>
+2026-03-13 11:36:15,514  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x10520eb90>
+2026-03-13 11:36:15,514  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:36:15,526  INFO  probe init: <garak.probes.divergence.Repeat object at 0x105215110>
+2026-03-13 11:36:15,526  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x105237ed0>
+2026-03-13 11:36:15,527  INFO  probe init: <garak.probes.glitch.Glitch object at 0x105248450>
+2026-03-13 11:37:44,570  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x10356a8d0>
+2026-03-13 11:37:44,849  DEBUG  langauge provision service: en,en
+2026-03-13 11:37:45,180  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x105ee05d0>
+2026-03-13 11:37:45,181  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x105d60bd0>
+2026-03-13 11:37:45,182  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x10647d310>
+2026-03-13 11:37:45,182  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x10618a650>
+2026-03-13 11:37:45,183  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x1064c4f90>
+2026-03-13 11:37:45,183  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x106478fd0>
+2026-03-13 11:37:45,183  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:37:45,188  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:37:45,191  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:37:45,194  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x1064c6850>
+2026-03-13 11:37:45,195  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x1064df290>
+2026-03-13 11:37:45,196  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x1064de910>
+2026-03-13 11:37:45,196  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x1064df1d0>
+2026-03-13 11:37:45,196  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:37:45,209  INFO  probe init: <garak.probes.divergence.Repeat object at 0x1064c78d0>
+2026-03-13 11:37:45,210  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x1064e9e50>
+2026-03-13 11:37:45,210  INFO  probe init: <garak.probes.glitch.Glitch object at 0x106510890>
+2026-03-13 11:50:00,979  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x1037ae710>
+2026-03-13 11:50:01,229  DEBUG  langauge provision service: en,en
+2026-03-13 11:50:01,535  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x105698c50>
+2026-03-13 11:50:01,536  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x1055b5cd0>
+2026-03-13 11:50:01,537  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x105217510>
+2026-03-13 11:50:01,537  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x105a77910>
+2026-03-13 11:50:01,538  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x105a814d0>
+2026-03-13 11:50:01,538  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x105a80bd0>
+2026-03-13 11:50:01,538  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:50:01,543  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:50:01,545  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:50:01,548  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x105a82fd0>
+2026-03-13 11:50:01,549  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x105a96d10>
+2026-03-13 11:50:01,549  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x105a96990>
+2026-03-13 11:50:01,550  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x105a96cd0>
+2026-03-13 11:50:01,550  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:50:01,562  INFO  probe init: <garak.probes.divergence.Repeat object at 0x105aaacd0>
+2026-03-13 11:50:01,563  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x105acdbd0>
+2026-03-13 11:50:01,563  INFO  probe init: <garak.probes.glitch.Glitch object at 0x105ace750>
+2026-03-13 11:50:09,051  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x105e428d0>
+2026-03-13 11:50:09,245  DEBUG  langauge provision service: en,en
+2026-03-13 11:50:09,549  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x1108e4990>
+2026-03-13 11:50:09,550  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x110805790>
+2026-03-13 11:50:09,550  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x110c8d150>
+2026-03-13 11:50:09,551  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x110805790>
+2026-03-13 11:50:09,552  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x110cd1110>
+2026-03-13 11:50:09,552  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x110cd0790>
+2026-03-13 11:50:09,552  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:50:09,555  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:50:09,557  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:50:09,560  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x110cd29d0>
+2026-03-13 11:50:09,561  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x110e0e5d0>
+2026-03-13 11:50:09,561  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x110e0d9d0>
+2026-03-13 11:50:09,562  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x110e0db90>
+2026-03-13 11:50:09,562  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:50:09,571  INFO  probe init: <garak.probes.divergence.Repeat object at 0x110e22690>
+2026-03-13 11:50:09,571  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x110e45790>
+2026-03-13 11:50:09,571  INFO  probe init: <garak.probes.glitch.Glitch object at 0x110e46190>
+2026-03-13 11:54:08,208  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x105df9310>
+2026-03-13 11:54:08,461  DEBUG  langauge provision service: en,en
+2026-03-13 11:54:08,766  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x107d1cb50>
+2026-03-13 11:54:08,767  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x107c3db90>
+2026-03-13 11:54:08,768  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x1080c1f90>
+2026-03-13 11:54:08,768  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x107c3db90>
+2026-03-13 11:54:08,769  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x108109450>
+2026-03-13 11:54:08,769  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x1080c1bd0>
+2026-03-13 11:54:08,769  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:54:08,773  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:54:08,775  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:54:08,779  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x10810af50>
+2026-03-13 11:54:08,779  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x108130650>
+2026-03-13 11:54:08,779  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x10811d890>
+2026-03-13 11:54:08,780  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x10811f750>
+2026-03-13 11:54:08,780  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:54:08,793  INFO  probe init: <garak.probes.divergence.Repeat object at 0x1080188d0>
+2026-03-13 11:54:08,793  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x108156190>
+2026-03-13 11:54:08,794  INFO  probe init: <garak.probes.glitch.Glitch object at 0x108156a90>
+2026-03-13 11:55:10,779  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x1019b9310>
+2026-03-13 11:55:11,019  DEBUG  langauge provision service: en,en
+2026-03-13 11:55:11,323  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x1038dca90>
+2026-03-13 11:55:11,324  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x1037fda50>
+2026-03-13 11:55:11,324  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x103c81150>
+2026-03-13 11:55:11,325  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x103768e50>
+2026-03-13 11:55:11,325  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x103cc93d0>
+2026-03-13 11:55:11,326  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x103cc9390>
+2026-03-13 11:55:11,326  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:55:11,329  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:55:11,331  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:55:11,334  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x103ccad90>
+2026-03-13 11:55:11,335  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x103ce8650>
+2026-03-13 11:55:11,335  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x103ccacd0>
+2026-03-13 11:55:11,336  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x103ce85d0>
+2026-03-13 11:55:11,336  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:55:11,348  INFO  probe init: <garak.probes.divergence.Repeat object at 0x103ccbfd0>
+2026-03-13 11:55:11,348  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x103d16210>
+2026-03-13 11:55:11,349  INFO  probe init: <garak.probes.glitch.Glitch object at 0x103d16b10>
+2026-03-13 11:55:50,412  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x1012cac90>
+2026-03-13 11:55:50,661  DEBUG  langauge provision service: en,en
+2026-03-13 11:55:50,971  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x103043590>
+2026-03-13 11:55:50,972  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x1031b4890>
+2026-03-13 11:55:50,973  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x100941b90>
+2026-03-13 11:55:50,974  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x103556c10>
+2026-03-13 11:55:50,974  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x1035a1250>
+2026-03-13 11:55:50,974  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x1018ea150>
+2026-03-13 11:55:50,975  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:55:50,979  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:55:50,981  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:55:50,984  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x1035a2c50>
+2026-03-13 11:55:50,985  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x1035bbe90>
+2026-03-13 11:55:50,985  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x1035bad90>
+2026-03-13 11:55:50,986  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x1035bb390>
+2026-03-13 11:55:50,986  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:55:51,000  INFO  probe init: <garak.probes.divergence.Repeat object at 0x1035c6310>
+2026-03-13 11:55:51,000  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x1035ed350>
+2026-03-13 11:55:51,001  INFO  probe init: <garak.probes.glitch.Glitch object at 0x1035edc90>
+2026-03-13 11:56:33,475  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x10123afd0>
+2026-03-13 11:56:33,727  DEBUG  langauge provision service: en,en
+2026-03-13 11:56:34,037  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x103124910>
+2026-03-13 11:56:34,038  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x103045810>
+2026-03-13 11:56:34,039  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x10350b890>
+2026-03-13 11:56:34,039  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x103045810>
+2026-03-13 11:56:34,040  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x103511250>
+2026-03-13 11:56:34,040  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x1034ce710>
+2026-03-13 11:56:34,040  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:56:34,044  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:56:34,047  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:56:34,050  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x103512c90>
+2026-03-13 11:56:34,050  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x10352be10>
+2026-03-13 11:56:34,050  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x10352b310>
+2026-03-13 11:56:34,051  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x10352bd90>
+2026-03-13 11:56:34,051  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:56:34,063  INFO  probe init: <garak.probes.divergence.Repeat object at 0x103536590>
+2026-03-13 11:56:34,064  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x10355d510>
+2026-03-13 11:56:34,064  INFO  probe init: <garak.probes.glitch.Glitch object at 0x10355df50>
+2026-03-13 11:58:14,366  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x1019bae90>
+2026-03-13 11:58:14,628  DEBUG  langauge provision service: en,en
+2026-03-13 11:58:14,942  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x10394fb50>
+2026-03-13 11:58:14,944  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x1037c5b10>
+2026-03-13 11:58:14,945  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x103c49150>
+2026-03-13 11:58:14,945  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x1037c5bd0>
+2026-03-13 11:58:14,946  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x103c8d390>
+2026-03-13 11:58:14,946  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x103c8ca90>
+2026-03-13 11:58:14,946  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:58:14,950  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:58:14,953  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:58:14,956  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x103c8ee10>
+2026-03-13 11:58:14,957  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x103cb4090>
+2026-03-13 11:58:14,957  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x103ca5990>
+2026-03-13 11:58:14,958  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x103ca7d50>
+2026-03-13 11:58:14,958  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:58:14,970  INFO  probe init: <garak.probes.divergence.Repeat object at 0x103915cd0>
+2026-03-13 11:58:14,971  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x103cdd390>
+2026-03-13 11:58:14,971  INFO  probe init: <garak.probes.glitch.Glitch object at 0x103cddd90>
+2026-03-13 11:58:54,707  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x1036cafd0>
+2026-03-13 11:58:54,962  DEBUG  langauge provision service: en,en
+2026-03-13 11:58:55,277  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x1055b4850>
+2026-03-13 11:58:55,278  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x1054d5810>
+2026-03-13 11:58:55,279  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x105993710>
+2026-03-13 11:58:55,279  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x1054d5890>
+2026-03-13 11:58:55,280  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x10599d110>
+2026-03-13 11:58:55,280  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x10599d0d0>
+2026-03-13 11:58:55,280  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 11:58:55,285  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 11:58:55,287  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 11:58:55,290  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x10599e710>
+2026-03-13 11:58:55,291  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x1059b2990>
+2026-03-13 11:58:55,291  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x1059b2090>
+2026-03-13 11:58:55,292  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x1059b2910>
+2026-03-13 11:58:55,292  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 11:58:55,304  INFO  probe init: <garak.probes.divergence.Repeat object at 0x1059c6f90>
+2026-03-13 11:58:55,305  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x1059edd90>
+2026-03-13 11:58:55,305  INFO  probe init: <garak.probes.glitch.Glitch object at 0x1059ee7d0>
+2026-03-13 12:16:41,985  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x1059fc490>
+2026-03-13 12:16:42,233  DEBUG  langauge provision service: en,en
+2026-03-13 12:16:42,542  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x10756fd10>
+2026-03-13 12:16:42,543  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x1074a4d10>
+2026-03-13 12:16:42,544  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x1074a4d90>
+2026-03-13 12:16:42,544  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x10638d610>
+2026-03-13 12:16:42,545  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x107963290>
+2026-03-13 12:16:42,545  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x107929250>
+2026-03-13 12:16:42,545  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 12:16:42,549  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 12:16:42,552  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 12:16:42,555  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x107958cd0>
+2026-03-13 12:16:42,555  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x10795bf10>
+2026-03-13 12:16:42,555  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x10795b3d0>
+2026-03-13 12:16:42,556  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x10795bed0>
+2026-03-13 12:16:42,556  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 12:16:42,568  INFO  probe init: <garak.probes.divergence.Repeat object at 0x10795be50>
+2026-03-13 12:16:42,568  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x1079b5390>
+2026-03-13 12:16:42,568  INFO  probe init: <garak.probes.glitch.Glitch object at 0x1079b5890>
+2026-03-13 12:17:48,286  INFO  probe init: <garak.probes.promptinject.HijackHateHumans object at 0x105cd0250>
+2026-03-13 12:17:48,488  DEBUG  langauge provision service: en,en
+2026-03-13 12:17:48,792  INFO  probe init: <garak.probes.web_injection.StringAssemblyDataExfil object at 0x105cd0610>
+2026-03-13 12:17:48,793  INFO  probe init: <garak.probes.dan.Dan_11_0 object at 0x107c24990>
+2026-03-13 12:17:48,794  INFO  probe init: <garak.probes.dan.DAN_Jailbreak object at 0x107c24ad0>
+2026-03-13 12:17:48,794  INFO  probe init: <garak.probes.dan.AntiDAN object at 0x104bbcf90>
+2026-03-13 12:17:48,795  INFO  probe init: <garak.probes.goodside.ThreatenJSON object at 0x1180f31d0>
+2026-03-13 12:17:48,795  INFO  probe init: <garak.probes.web_injection.TaskXSS object at 0x107fe6ad0>
+2026-03-13 12:17:48,795  DEBUG  payload scan: /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads
+2026-03-13 12:17:48,799  DEBUG  payload: Loading payload web_html_js from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/web_html_js.json
+2026-03-13 12:17:48,801  DEBUG  payload: Loading payload normal_instructions from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/normal_instructions.json
+2026-03-13 12:17:48,804  INFO  probe init: <garak.probes.ansiescape.AnsiEscaped object at 0x11810cb90>
+2026-03-13 12:17:48,805  INFO  probe init: <garak.probes.malwaregen.TopLevel object at 0x118114850>
+2026-03-13 12:17:48,805  INFO  probe init: <garak.probes.malwaregen.SubFunctions object at 0x11810e450>
+2026-03-13 12:17:48,806  INFO  probe init: <garak.probes.exploitation.SQLInjectionSystem object at 0x11810fd90>
+2026-03-13 12:17:48,806  DEBUG  payload: Loading payload sql_injection from /Users/yoshizakisae/Desktop/auto-injection-check/backend/venv/lib/python3.11/site-packages/garak/data/payloads/sql_injection.json
+2026-03-13 12:17:48,819  INFO  probe init: <garak.probes.divergence.Repeat object at 0x118116cd0>
+2026-03-13 12:17:48,819  INFO  probe init: <garak.probes.goodside.WhoIsRiley object at 0x118145cd0>
+2026-03-13 12:17:48,819  INFO  probe init: <garak.probes.glitch.Glitch object at 0x118146510>
