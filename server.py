@@ -3,10 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import sys
 import os
+import json
 import threading
 import uuid
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, List
+from dotenv import load_dotenv
+
+load_dotenv()
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
 
@@ -32,14 +36,13 @@ JOB_STORE: Dict[str, Dict[str, Any]] = {}
 JOB_LOCK = threading.Lock()
 ALLOWED_SCAN_MODES = get_allowed_scan_modes()
 ALLOWED_CONVERSATION_MODES = set(CONVERSATION_MODE_ORDER)
+AI_PROFILES_PATH = os.path.join(os.path.dirname(__file__), "backend", "ai_profiles.json")
 
 
 class ScanRequest(BaseModel):
     url: str
-    organization: str
-    username: str
-    password: str
     mode: str = "standard"
+    ai_profile_name: str | None = None
     is_random: bool | None = None
     conversation_mode: str | None = None
     total_limit: int | None = None
@@ -49,6 +52,42 @@ class ScanRequest(BaseModel):
     conversation_mode_distribution: Dict[str, int] | None = None
     shuffle_enabled: bool | None = None
     seed: int | None = None
+
+
+def load_ai_profiles() -> List[Dict[str, Any]]:
+    if not os.path.exists(AI_PROFILES_PATH):
+        raise RuntimeError(f"ai_profiles.json not found: {AI_PROFILES_PATH}")
+
+    with open(AI_PROFILES_PATH, "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+
+    if not isinstance(data, list):
+        raise RuntimeError("ai_profiles.json must contain a list")
+
+    return data
+
+
+def get_ai_profile_by_name(name: str | None) -> Dict[str, Any] | None:
+    if not name:
+        return None
+
+    for profile in load_ai_profiles():
+        if profile.get("name") == name:
+            return profile
+
+    return None
+
+
+def get_login_credentials() -> tuple[str, str]:
+    user_id = os.getenv("KANATA_USER_ID", "")
+    password = os.getenv("KANATA_PASSWORD", "")
+
+    if not user_id or not password:
+        raise RuntimeError(
+            "KANATA_USER_ID and KANATA_PASSWORD must be set in environment variables"
+        )
+
+    return user_id, password
 
 
 def build_scan_overrides(req: ScanRequest) -> Dict[str, Any]:
@@ -75,23 +114,38 @@ def run_scan_job(job_id: str, req: ScanRequest) -> None:
         status="running",
         started_at=datetime.utcnow().isoformat(),
     )
-    result = run_scan_process(
-        req.url,
-        req.organization,
-        req.username,
-        req.password,
-        req.mode,
-        req.is_random,
-        req.conversation_mode,
-        build_scan_overrides(req),
-    )
-    status = result.get("status", "failed")
-    update_job(
-        job_id,
-        status=status,
-        finished_at=datetime.utcnow().isoformat(),
-        result=result,
-    )
+
+    try:
+        user_id, password = get_login_credentials()
+        ai_profile = get_ai_profile_by_name(req.ai_profile_name)
+        result = run_scan_process(
+            req.url,
+            "",
+            user_id,
+            password,
+            req.mode,
+            req.is_random,
+            req.conversation_mode,
+            build_scan_overrides(req),
+            ai_profile=ai_profile,
+        )
+        status = result.get("status", "failed")
+        update_job(
+            job_id,
+            status=status,
+            finished_at=datetime.utcnow().isoformat(),
+            result=result,
+        )
+    except Exception as exc:
+        update_job(
+            job_id,
+            status="failed",
+            finished_at=datetime.utcnow().isoformat(),
+            result={
+                "status": "failed",
+                "error": str(exc),
+            },
+        )
 
 
 @app.get("/")
@@ -104,12 +158,21 @@ def get_scan_options():
     return export_scan_options()
 
 
+@app.get("/api/ai-profiles")
+def get_ai_profiles():
+    return load_ai_profiles()
+
+
 @app.post("/api/scan")
 def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
     if req.mode not in ALLOWED_SCAN_MODES:
         raise HTTPException(status_code=400, detail="invalid mode")
     if req.conversation_mode and req.conversation_mode not in ALLOWED_CONVERSATION_MODES:
         raise HTTPException(status_code=400, detail="invalid conversation_mode")
+    ai_profile = get_ai_profile_by_name(req.ai_profile_name)
+    if req.ai_profile_name and ai_profile is None:
+        raise HTTPException(status_code=400, detail="invalid ai_profile_name")
+
     try:
         resolved_settings = build_scan_settings(
             mode=req.mode,
@@ -130,6 +193,8 @@ def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
             "requested_mode": req.mode,
             "is_random": resolved_settings["shuffle_enabled"],
             "conversation_mode": req.conversation_mode,
+            "ai_profile_name": req.ai_profile_name,
+            "ai_profile": ai_profile,
             "scan_settings": {
                 "total_limit": resolved_settings["total_limit"],
                 "rounds": resolved_settings["rounds"],
@@ -152,6 +217,8 @@ def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
         "requested_mode": req.mode,
         "is_random": resolved_settings["shuffle_enabled"],
         "conversation_mode": req.conversation_mode,
+        "ai_profile_name": req.ai_profile_name,
+        "ai_profile": ai_profile,
         "scan_settings": JOB_STORE[job_id]["scan_settings"],
     }
 
@@ -171,5 +238,6 @@ def get_scan_status(job_id: str):
         payload["summary_csv"] = result.get("summary_csv")
         payload["report_file"] = result.get("report_file")
         payload["log_dir"] = result.get("log_dir")
+        payload["error"] = result.get("error")
 
     return payload

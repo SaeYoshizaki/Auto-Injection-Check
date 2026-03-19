@@ -63,6 +63,24 @@ type ScanJobResult = {
   };
 };
 
+type AIProfile = {
+  name: string;
+  ai_overview: string;
+  data_reference: {
+    policy: string;
+    sources?: string[];
+  };
+  role_purpose: string;
+  tone_style: string;
+  output_format: string;
+  prohibited_actions: string[];
+  answer_confidence: string;
+  handling_missing_info: string;
+  reasoning_rules: string;
+  security_privacy: string;
+  other_behaviors: string[];
+};
+
 const API_BASE = "http://127.0.0.1:8000";
 
 const cloneSettings = (settings: ScanSettings): ScanSettings => ({
@@ -85,12 +103,11 @@ const settingsEqual = (left: ScanSettings, right: ScanSettings) =>
 
 export default function Home() {
   const [formData, setFormData] = useState({
-    url: "https://ai-chat.third-scope.com/ts/chat",
-    organization: "",
-    username: "",
-    password: "",
+    url: "https://beta.kanata.app/ja/",
     mode: "",
   });
+  const [aiProfiles, setAiProfiles] = useState<AIProfile[]>([]);
+  const [selectedAIName, setSelectedAIName] = useState("");
   const [options, setOptions] = useState<ScanOptionsResponse | null>(null);
   const [scanSettings, setScanSettings] = useState<ScanSettings | null>(null);
   const [draftSettings, setDraftSettings] = useState<ScanSettings | null>(null);
@@ -110,32 +127,48 @@ export default function Home() {
   const selectedPreset =
     options?.modes.find((preset) => preset.key === formData.mode) ?? null;
 
+  const selectedAIProfile =
+    aiProfiles.find((profile) => profile.name === selectedAIName) ?? null;
+
   useEffect(() => {
-    const loadOptions = async () => {
+    const loadInitialData = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/scan/options`);
-        const data: ScanOptionsResponse = await res.json();
-        if (!res.ok) {
+        const [optionsRes, aiProfilesRes] = await Promise.all([
+          fetch(`${API_BASE}/api/scan/options`),
+          fetch(`${API_BASE}/api/ai-profiles`),
+        ]);
+
+        const optionsData: ScanOptionsResponse = await optionsRes.json();
+        const aiProfilesData: AIProfile[] = await aiProfilesRes.json();
+
+        if (!optionsRes.ok || !aiProfilesRes.ok) {
           throw new Error("failed");
         }
 
         const defaultPreset =
-          data.modes.find((preset) => preset.key === data.default_mode) ??
-          data.modes[0];
+          optionsData.modes.find(
+            (preset) => preset.key === optionsData.default_mode
+          ) ?? optionsData.modes[0];
 
-        setOptions(data);
+        setOptions(optionsData);
+        setAiProfiles(aiProfilesData);
+
         if (defaultPreset) {
           setFormData((prev) => ({ ...prev, mode: defaultPreset.key }));
           setScanSettings(cloneSettings(defaultPreset.settings));
         }
+
+        if (aiProfilesData.length > 0) {
+          setSelectedAIName(aiProfilesData[0].name);
+        }
       } catch (error) {
         console.error(error);
         setStatus("error");
-        setMessage("スキャン設定の読み込みに失敗しました");
+        setMessage("初期設定の読み込みに失敗しました");
       }
     };
 
-    loadOptions();
+    loadInitialData();
   }, []);
 
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -281,7 +314,7 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!scanSettings || !formData.mode) {
+    if (!scanSettings || !formData.mode || !selectedAIName) {
       return;
     }
 
@@ -306,7 +339,9 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...formData,
+          url: formData.url,
+          mode: formData.mode,
+          ai_profile_name: selectedAIName,
           is_random: scanSettings.shuffle_enabled,
           total_limit: scanSettings.total_limit,
           rounds: scanSettings.rounds,
@@ -329,7 +364,9 @@ export default function Home() {
 
       setJobId(data.job_id);
       setMessage(
-        `スキャンを受け付けました\nジョブID: ${data.job_id}\nモード: ${
+        `スキャンを受け付けました\nジョブID: ${
+          data.job_id
+        }\n対象AI: ${selectedAIName}\nモード: ${
           selectedPreset?.label ?? formData.mode
         }${isCustomSettings ? "（カスタム設定）" : ""}\n状態: queued`
       );
@@ -342,7 +379,7 @@ export default function Home() {
     }
   };
 
-  if (!options || !scanSettings) {
+  if (!options || !scanSettings || aiProfiles.length === 0) {
     return (
       <main className="min-h-screen bg-stone-100 flex items-center justify-center p-6 text-stone-900">
         <div className="w-full max-w-xl rounded-3xl border border-stone-200 bg-white p-8 shadow-sm">
@@ -383,45 +420,71 @@ export default function Home() {
                     required
                   />
                 </div>
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-sm font-medium text-stone-700">
-                    組織ID
-                  </label>
-                  <input
-                    type="text"
-                    name="organization"
-                    value={formData.organization}
-                    onChange={handleTextChange}
-                    className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-amber-500"
-                    required
-                  />
+              </div>
+
+              <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800">
+                ログイン情報は画面から入力せず、ローカル環境変数から読み込みます。
+                <div className="mt-2 font-mono text-xs text-sky-900">
+                  KANATA_USER_ID / KANATA_PASSWORD
                 </div>
+              </div>
+
+              <div className="rounded-[24px] border border-stone-200 bg-stone-50 p-5">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-stone-700">
-                    ユーザー名
-                  </label>
-                  <input
-                    type="text"
-                    name="username"
-                    value={formData.username}
-                    onChange={handleTextChange}
-                    className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-amber-500"
-                    required
-                  />
+                  <h2 className="text-sm font-semibold text-stone-800">
+                    対象AI
+                  </h2>
+                  <p className="text-xs text-stone-500">
+                    診断対象にするAIを選択してください。
+                  </p>
                 </div>
-                <div>
+
+                <div className="mt-4">
                   <label className="mb-1 block text-sm font-medium text-stone-700">
-                    パスワード
+                    AI選択
                   </label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleTextChange}
-                    className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-amber-500"
+                  <select
+                    value={selectedAIName}
+                    onChange={(e) => setSelectedAIName(e.target.value)}
+                    className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-amber-500"
                     required
-                  />
+                  >
+                    {aiProfiles.map((profile) => (
+                      <option key={profile.name} value={profile.name}>
+                        {profile.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+
+                {selectedAIProfile && (
+                  <div className="mt-4 rounded-2xl border border-stone-200 bg-white p-4 text-sm text-stone-700">
+                    <div className="font-medium text-stone-900">
+                      {selectedAIProfile.name}
+                    </div>
+                    <div className="mt-2 text-stone-600">
+                      {selectedAIProfile.ai_overview}
+                    </div>
+                    <div className="mt-3 grid gap-2 md:grid-cols-2">
+                      <div>
+                        <span className="text-stone-500">役割・目的: </span>
+                        {selectedAIProfile.role_purpose}
+                      </div>
+                      <div>
+                        <span className="text-stone-500">トーン・文体: </span>
+                        {selectedAIProfile.tone_style}
+                      </div>
+                      <div>
+                        <span className="text-stone-500">回答の確実性: </span>
+                        {selectedAIProfile.answer_confidence}
+                      </div>
+                      <div>
+                        <span className="text-stone-500">セキュリティ: </span>
+                        {selectedAIProfile.security_privacy}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-[24px] border border-stone-200 bg-stone-50 p-5">
@@ -473,7 +536,7 @@ export default function Home() {
 
               <button
                 type="submit"
-                disabled={status === "loading"}
+                disabled={status === "loading" || !selectedAIName}
                 className={`w-full rounded-2xl px-5 py-4 text-base font-semibold text-white transition ${
                   status === "loading"
                     ? "cursor-not-allowed bg-stone-400"
@@ -499,6 +562,40 @@ export default function Home() {
                   {selectedPreset?.description}
                 </div>
               </div>
+
+              {selectedAIProfile && (
+                <div className="rounded-2xl border border-stone-200 p-4">
+                  <div className="font-medium text-stone-800">選択中のAI</div>
+                  <div className="mt-2 text-base font-semibold text-stone-900">
+                    {selectedAIProfile.name}
+                  </div>
+                  <div className="mt-1 text-stone-600">
+                    {selectedAIProfile.ai_overview}
+                  </div>
+                  <div className="mt-3 space-y-2 text-sm">
+                    <div>
+                      <span className="text-stone-500">学習データ参照: </span>
+                      {selectedAIProfile.data_reference.policy}
+                    </div>
+                    <div>
+                      <span className="text-stone-500">役割・目的: </span>
+                      {selectedAIProfile.role_purpose}
+                    </div>
+                    <div>
+                      <span className="text-stone-500">トーン・文体: </span>
+                      {selectedAIProfile.tone_style}
+                    </div>
+                    <div>
+                      <span className="text-stone-500">推論ルール: </span>
+                      {selectedAIProfile.reasoning_rules}
+                    </div>
+                    <div>
+                      <span className="text-stone-500">禁止事項数: </span>
+                      {selectedAIProfile.prohibited_actions.length}件
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-2xl border border-stone-200 p-4">

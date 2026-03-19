@@ -8,6 +8,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List
 
+import logging
+
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
@@ -33,9 +35,11 @@ from report_generator import (
 DEFAULT_CONVERSATION_MODE = "clean_chat"
 CONVERSATION_MODES = {DEFAULT_CONVERSATION_MODE, "conversational"}
 
-INPUT_SELECTOR: str = "form textarea"
-OUTPUT_SELECTOR: str = ".mr-auto"
-DEFAULT_INTERVAL_SECONDS = 5
+logger = logging.getLogger(__name__)
+
+INPUT_SELECTOR: str = "textarea[name='message']"
+OUTPUT_SELECTOR: str = "div.prose"
+DEFAULT_INTERVAL_SECONDS = 1
 
 LOG_ROOT: Path = Path(os.path.dirname(__file__)) / "scan_logs"
 LOG_ROOT.mkdir(parents=True, exist_ok=True)
@@ -328,6 +332,7 @@ def write_summary_files(
             scan_settings["conversation_mode_distribution"]
         ),
         "conversation_mode_distribution": scan_settings["conversation_mode_distribution"],
+        "ai_profile": scan_settings.get("ai_profile"),
         "rounds": scan_settings["rounds"],
         "total_limit": scan_settings["total_limit"],
         "variants_per_base": scan_settings["variants_per_base"],
@@ -386,6 +391,7 @@ def run_scan_process(
     is_random: bool | None = None,
     conversation_mode: str | None = DEFAULT_CONVERSATION_MODE,
     scan_overrides: Dict[str, Any] | None = None,
+    ai_profile: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     try:
         if conversation_mode:
@@ -397,6 +403,7 @@ def run_scan_process(
             conversation_mode=conversation_mode,
             shuffle_enabled=is_random,
         )
+        scan_settings["ai_profile"] = ai_profile
         interval = DEFAULT_INTERVAL_SECONDS
         rounds = int(scan_settings["rounds"])
         conversation_mode_summary = summarize_conversation_mode(
@@ -415,22 +422,72 @@ def run_scan_process(
             meta["id"]: [] for meta in prompt_metadata
         }
 
-        driver = WebChatDriver(url, INPUT_SELECTOR, OUTPUT_SELECTOR, headless=False)
+        logger.info("ai_profile in run_scan_process: %s", ai_profile)
+
+        resolved_space_name = (ai_profile or {}).get("space_name") or ""
+        resolved_project_name = (ai_profile or {}).get("project_name") or ""
+        resolved_ai_name = (ai_profile or {}).get("ai_name") or ""
+
+        logger.info(
+            "Resolved navigation targets: space_name=%s project_name=%s ai_name=%s",
+            resolved_space_name,
+            resolved_project_name,
+            resolved_ai_name,
+        )
+
+        driver = WebChatDriver(
+            url,
+            INPUT_SELECTOR,
+            OUTPUT_SELECTOR,
+            headless=False,
+            space_name=resolved_space_name,
+            project_name=resolved_project_name,
+            ai_name=resolved_ai_name,
+        )
+        logger.info("run_scan_process started")
+        logger.info("INPUT_SELECTOR=%s", INPUT_SELECTOR)
+        logger.info("OUTPUT_SELECTOR=%s", OUTPUT_SELECTOR)
+        logger.info("rounds=%s prompt_count=%s interval=%s", rounds, len(prompt_metadata), interval)
+        if ai_profile:
+            logger.info("AI profile selected: %s", ai_profile.get("name"))
 
         try:
             driver.start()
+            if not resolved_space_name or not resolved_project_name or not resolved_ai_name:
+                raise RuntimeError(
+                    f"navigation targets are missing: "
+                    f"space_name={resolved_space_name!r}, "
+                    f"project_name={resolved_project_name!r}, "
+                    f"ai_name={resolved_ai_name!r}, "
+                    f"ai_profile={ai_profile!r}"
+                )
             driver.login(org, username, password)
+            logger.info("driver.login completed")
             error_streak = 0
 
             for round_number in range(1, rounds + 1):
                 round_entries: List[Dict[str, Any]] = []
                 for meta in prompt_metadata:
                     prompt_text = meta["prompt"]
+                    logger.info(
+                        "round=%s prompt_id=%s category=%s conversation_mode=%s start",
+                        round_number,
+                        meta["id"],
+                        meta["category"],
+                        meta["conversation_mode"],
+                    )
                     t0 = time.time()
                     try:
                         response = driver.send_prompt(
                             prompt_text,
                             conversation_mode=meta["conversation_mode"],
+                        )
+                        logger.info(
+                            "round=%s prompt_id=%s response_received length=%s preview=%s",
+                            round_number,
+                            meta["id"],
+                            len(response or ""),
+                            (response or "")[:120].replace("\n", " "),
                         )
                         if not response:
                             error_streak += 1
@@ -453,6 +510,12 @@ def run_scan_process(
                             entry_reason = eval_result.get("reason", "")
                             entry_response = response
                     except Exception as exc:
+                        logger.exception(
+                            "round=%s prompt_id=%s driver exception: %s",
+                            round_number,
+                            meta["id"],
+                            exc,
+                        )
                         error_streak += 1
                         entry_status = STATUS_ERROR
                         entry_reason = "driver exception"
@@ -472,11 +535,25 @@ def run_scan_process(
 
                     per_prompt_history[meta["id"]].append(history_item)
                     round_entries.append(history_item)
+                    logger.info(
+                        "round=%s prompt_id=%s status=%s error_streak=%s",
+                        round_number,
+                        meta["id"],
+                        entry_status,
+                        error_streak,
+                    )
 
                     if error_streak >= 5:
                         raise Exception("Too many consecutive errors.")
 
                     dt = time.time() - t0
+                    logger.info(
+                        "round=%s prompt_id=%s elapsed=%.2f sleep=%.2f",
+                        round_number,
+                        meta["id"],
+                        dt,
+                        max(interval - dt, 0),
+                    )
                     if interval - dt > 0:
                         time.sleep(interval - dt)
 
@@ -494,13 +571,14 @@ def run_scan_process(
 
         if aggregated_results:
             report_path = log_dir / f"scan_report_{scan_settings['mode']}_{timestamp}.pdf"
-            generate_report(aggregated_results, str(report_path))
+            generate_report(aggregated_results, str(report_path), ai_profile=ai_profile)
             return {
                 "status": "completed",
                 "mode": scan_settings["mode"],
                 "requested_mode": scan_settings["requested_mode"],
                 "conversation_mode": conversation_mode_summary,
                 "conversation_mode_distribution": scan_settings["conversation_mode_distribution"],
+                "ai_profile": ai_profile,
                 "scan_settings": {
                     "total_limit": scan_settings["total_limit"],
                     "rounds": scan_settings["rounds"],
@@ -508,6 +586,7 @@ def run_scan_process(
                     "category_distribution": scan_settings["category_distribution"],
                     "shuffle_enabled": scan_settings["shuffle_enabled"],
                     "seed": scan_settings.get("seed"),
+                    "ai_profile": ai_profile,
                 },
                 "report_file": str(report_path),
                 "summary_json": str(summary_json),
@@ -516,8 +595,8 @@ def run_scan_process(
                 "results": aggregated_results,
             }
 
-        return {"status": "failed", "error": "no results"}
+        return {"status": "failed", "error": "no results", "ai_profile": ai_profile}
 
     except Exception:
         traceback.print_exc()
-        return {"status": "failed", "error": "init crash"}
+        return {"status": "failed", "error": "init crash", "ai_profile": ai_profile}
