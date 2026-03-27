@@ -1,54 +1,163 @@
 import csv
 import json
+import logging
 import os
 import random
+import sys
 import time
 import traceback
 from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List
-
-import logging
-
-import sys
+from datetime import datetime, timezone
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
 
+from config.baseline_prompts import get_baseline_prompt_entries
 from config.fixed_prompts import get_prompt_entries, get_prompt_variants
-from config.scan_presets import (
-    CATEGORY_ORDER,
-    build_scan_settings,
-    summarize_conversation_mode,
-)
-from garak_adapter.probe_loader import load_prompt_entries_by_category
+from config.scan_presets import CATEGORY_ORDER, build_scan_settings, summarize_conversation_mode
 from garak_adapter.custom_driver import WebChatDriver
+from garak_adapter.probe_loader import load_prompt_entries_by_category
 from report_generator import (
-    evaluate_response,
-    generate_report,
-    normalize_status,
+    BASELINE_STATUS_ERROR,
+    BASELINE_STATUS_FAIL,
+    BASELINE_STATUS_PASS,
+    BASELINE_STATUS_SOFT_FAIL,
+    SCAN_TYPE_ATTACK_ONLY,
+    SCAN_TYPE_BASELINE_ONLY,
+    SCAN_TYPE_FULL,
+    SECTION_ATTACK,
+    SECTION_BASELINE,
     STATUS_DANGEROUS,
     STATUS_ERROR,
     STATUS_SAFE,
     STATUS_WARNING,
+    evaluate_attack_response,
+    evaluate_baseline_response,
+    generate_report,
+    generate_comparison_report,
+    normalize_status,
 )
 
 DEFAULT_CONVERSATION_MODE = "clean_chat"
 CONVERSATION_MODES = {DEFAULT_CONVERSATION_MODE, "conversational"}
+INPUT_SELECTOR = "textarea[name='message']"
+OUTPUT_SELECTOR = "div.prose"
+DEFAULT_INTERVAL_SECONDS = 1
+
+LOG_ROOT = Path(os.path.dirname(__file__)) / "scan_logs"
+LOG_ROOT.mkdir(parents=True, exist_ok=True)
+COMPARISON_ROOT = Path(os.path.dirname(__file__)) / "comparison_sessions"
+COMPARISON_ROOT.mkdir(parents=True, exist_ok=True)
 
 logger = logging.getLogger(__name__)
 
-INPUT_SELECTOR: str = "textarea[name='message']"
-OUTPUT_SELECTOR: str = "div.prose"
-DEFAULT_INTERVAL_SECONDS = 1
 
-LOG_ROOT: Path = Path(os.path.dirname(__file__)) / "scan_logs"
-LOG_ROOT.mkdir(parents=True, exist_ok=True)
+def comparison_session_path() -> Path:
+    return COMPARISON_ROOT / "active_session.json"
 
-STATUS_PRIORITY: Dict[str, int] = {
-    STATUS_SAFE: 1,
-    STATUS_ERROR: 2,
-    STATUS_WARNING: 3,
-    STATUS_DANGEROUS: 4,
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).astimezone().isoformat()
+
+
+def _flatten_results_for_comparison(profile_name: str, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    flattened: List[Dict[str, Any]] = []
+    for section in [SECTION_BASELINE, SECTION_ATTACK]:
+        for entry in payload.get(section, {}).get("results", []):
+            flattened.append(
+                {
+                    "section": section,
+                    "prompt_id": entry.get("prompt_id"),
+                    "category": entry.get("category"),
+                    "language": entry.get("language"),
+                    "prompt": entry.get("prompt"),
+                    "response": entry.get("response"),
+                    "status": entry.get("status"),
+                    "reason": entry.get("reason"),
+                    "rounds": entry.get("rounds"),
+                    "worst_round": entry.get("worst_round"),
+                    "round_statuses": entry.get("round_statuses", {}),
+                    "violated_rules": entry.get("violated_rules", []),
+                    "profile_name": profile_name,
+                }
+            )
+    return flattened
+
+
+def save_comparison_session_result(
+    *,
+    payload: Dict[str, Any],
+    ai_profile: Dict[str, Any] | None,
+    target_url: str,
+    conversation_mode: str,
+    judge_model: str = "gpt-4o",
+) -> Path:
+    path = comparison_session_path()
+    if path.exists():
+        session_data = json.loads(path.read_text(encoding="utf-8"))
+    else:
+        session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        session_data = {
+            "session_id": session_id,
+            "created_at": _now_iso(),
+            "scan_type": payload.get("scan_type"),
+            "prompt_set_version": "current",
+            "target_url": target_url,
+            "conversation_mode": conversation_mode,
+            "judge_model": judge_model,
+            "profiles": [],
+        }
+
+    profile_name = str((ai_profile or {}).get("name") or "unknown")
+    flattened_results = _flatten_results_for_comparison(profile_name, payload)
+    profile_entry = {
+        "profile_id": str((ai_profile or {}).get("ai_name") or profile_name),
+        "profile_name": profile_name,
+        "ai_profile": ai_profile or {},
+        "results": flattened_results,
+        "updated_at": _now_iso(),
+    }
+
+    profiles = [entry for entry in session_data.get("profiles", []) if entry.get("profile_name") != profile_name]
+    profiles.append(profile_entry)
+    session_data["profiles"] = profiles
+    session_data["scan_type"] = payload.get("scan_type")
+    session_data["target_url"] = target_url
+    session_data["conversation_mode"] = conversation_mode
+    session_data["judge_model"] = judge_model
+    path.write_text(json.dumps(session_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def generate_comparison_report_from_session() -> Dict[str, Any]:
+    path = comparison_session_path()
+    if not path.exists():
+        raise RuntimeError("comparison session json not found")
+    session_data = json.loads(path.read_text(encoding="utf-8"))
+    timestamp = int(time.time())
+    report_path = COMPARISON_ROOT / f"comparison_report_{timestamp}.pdf"
+    generate_comparison_report(session_data, str(report_path))
+    return {
+        "session_json": str(path),
+        "report_file": str(report_path),
+        "session_id": session_data.get("session_id"),
+        "profile_count": len(session_data.get("profiles", [])),
+    }
+
+SECTION_PRIORITY: Dict[str, Dict[str, int]] = {
+    SECTION_ATTACK: {
+        STATUS_SAFE: 1,
+        STATUS_ERROR: 2,
+        STATUS_WARNING: 3,
+        STATUS_DANGEROUS: 4,
+    },
+    SECTION_BASELINE: {
+        BASELINE_STATUS_PASS: 1,
+        BASELINE_STATUS_ERROR: 2,
+        BASELINE_STATUS_SOFT_FAIL: 3,
+        BASELINE_STATUS_FAIL: 4,
+    },
 }
 
 
@@ -59,111 +168,10 @@ def normalize_conversation_mode(conversation_mode: str) -> str:
     return normalized
 
 
-def ensure_log_dir(mode: str, conversation_mode: str, timestamp: int) -> Path:
-    target = LOG_ROOT / mode / conversation_mode / str(timestamp)
+def ensure_log_dir(scan_type: str, mode: str, conversation_mode: str, timestamp: int) -> Path:
+    target = LOG_ROOT / scan_type / mode / conversation_mode / str(timestamp)
     target.mkdir(parents=True, exist_ok=True)
     return target
-
-
-def determine_final_status(statuses: List[str]) -> str:
-    normalized = [normalize_status(status) for status in statuses]
-
-    if STATUS_DANGEROUS in normalized:
-        return STATUS_DANGEROUS
-    if STATUS_WARNING in normalized:
-        return STATUS_WARNING
-    if all(status == STATUS_ERROR for status in normalized):
-        return STATUS_ERROR
-    if STATUS_ERROR in normalized and STATUS_SAFE in normalized:
-        return STATUS_WARNING
-
-    return STATUS_SAFE
-
-
-def pick_worst_round(history: List[Dict[str, Any]]) -> Dict[str, Any]:
-    return sorted(
-        history,
-        key=lambda entry: STATUS_PRIORITY.get(entry.get("status", STATUS_WARNING), 0),
-        reverse=True,
-    )[0]
-
-
-def build_aggregated_results(
-    history_map: Dict[str, List[Dict[str, Any]]],
-    metadata: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
-    aggregated: List[Dict[str, Any]] = []
-
-    for meta in metadata:
-        history = history_map.get(meta["id"], [])
-        if not history:
-            continue
-
-        statuses = [entry["status"] for entry in history]
-        final_status = determine_final_status(statuses)
-        worst_round = pick_worst_round(history)
-        counter = Counter(statuses)
-        error_rounds = counter.get(STATUS_ERROR, 0)
-
-        aggregated.append(
-            {
-                "prompt_id": meta["id"],
-                "prompt": meta["prompt"],
-                "category": meta["category"],
-                "set_type": meta.get("set_type"),
-                "conversation_mode": meta["conversation_mode"],
-                "source_id": meta.get("source_id"),
-                "base_source_id": meta.get("base_source_id"),
-                "source_mode": meta.get("source_mode"),
-                "variant_type": meta.get("variant_type"),
-                "language": meta.get("language"),
-                "status": final_status,
-                "response": worst_round.get("response", ""),
-                "reason": worst_round.get("reason", ""),
-                "rounds": len(history),
-                "round_statuses": dict(counter),
-                "worst_round": worst_round.get("round"),
-                "had_error": error_rounds > 0,
-                "error_rounds": error_rounds,
-            }
-        )
-
-    return aggregated
-
-
-def write_round_log(log_dir: Path, round_number: int, entries: List[Dict[str, Any]]) -> Path:
-    path = log_dir / f"round-{round_number}.json"
-    with path.open("w", encoding="utf-8") as fh:
-        json.dump(entries, fh, ensure_ascii=False, indent=2)
-    return path
-
-
-def format_status_counts(status_counts: Dict[str, int]) -> str:
-    ordered = [STATUS_DANGEROUS, STATUS_WARNING, STATUS_ERROR, STATUS_SAFE]
-    return ";".join(f"{status}:{status_counts.get(status, 0)}" for status in ordered)
-
-
-def allocate_counts(
-    total: int,
-    distribution: Dict[str, int],
-    keys: tuple[str, ...] | List[str],
-) -> Dict[str, int]:
-    if total <= 0:
-        return {key: 0 for key in keys}
-
-    raw_counts = {
-        key: (total * distribution.get(key, 0)) / 100 for key in keys
-    }
-    counts = {key: int(raw_counts[key]) for key in keys}
-    remaining = total - sum(counts.values())
-    remainders = sorted(
-        keys,
-        key=lambda key: (raw_counts[key] - counts[key], -list(keys).index(key)),
-        reverse=True,
-    )
-    for key in remainders[:remaining]:
-        counts[key] += 1
-    return counts
 
 
 def stable_entry_key(entry: Dict[str, Any]) -> tuple[str, str, str, str]:
@@ -179,13 +187,27 @@ def stable_sort_entries(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return sorted(entries, key=stable_entry_key)
 
 
+def allocate_counts(total: int, distribution: Dict[str, int], keys: tuple[str, ...] | List[str]) -> Dict[str, int]:
+    if total <= 0:
+        return {key: 0 for key in keys}
+    raw_counts = {key: (total * distribution.get(key, 0)) / 100 for key in keys}
+    counts = {key: int(raw_counts[key]) for key in keys}
+    remaining = total - sum(counts.values())
+    remainders = sorted(
+        keys,
+        key=lambda key: (raw_counts[key] - counts[key], -list(keys).index(key)),
+        reverse=True,
+    )
+    for key in remainders[:remaining]:
+        counts[key] += 1
+    return counts
+
+
 def load_base_entries(category: str, set_types: tuple[str, ...]) -> List[Dict[str, Any]]:
     entries = get_prompt_entries(categories=[category], set_types=set_types)
     if entries:
         return stable_sort_entries(entries)
-    return stable_sort_entries(
-        load_prompt_entries_by_category(category, limit=200, set_types=set_types)
-    )
+    return stable_sort_entries(load_prompt_entries_by_category(category, limit=200, set_types=set_types))
 
 
 def load_variant_map(category: str, set_types: tuple[str, ...]) -> Dict[str, List[Dict[str, Any]]]:
@@ -201,14 +223,9 @@ def load_variant_map(category: str, set_types: tuple[str, ...]) -> Dict[str, Lis
     return variant_map
 
 
-def select_category_prompts(
-    category: str,
-    target_count: int,
-    settings: Dict[str, Any],
-) -> List[Dict[str, Any]]:
+def select_category_prompts(category: str, target_count: int, settings: Dict[str, Any]) -> List[Dict[str, Any]]:
     if target_count <= 0:
         return []
-
     set_types = tuple(settings["set_types"])
     variants_per_base = int(settings["variants_per_base"])
     base_entries = load_base_entries(category, set_types)
@@ -217,41 +234,37 @@ def select_category_prompts(
 
     variant_map = load_variant_map(category, set_types)
     selected: List[Dict[str, Any]] = []
-
     for base_entry in base_entries:
         bundle = [base_entry]
-        variants = variant_map.get(base_entry.get("source_id") or "", [])
-        bundle.extend(variants[: max(0, variants_per_base - 1)])
+        bundle.extend(variant_map.get(base_entry.get("source_id") or "", [])[: max(0, variants_per_base - 1)])
         for entry in bundle:
             selected.append(entry)
             if len(selected) >= target_count:
                 return selected
-
-    if len(selected) >= target_count:
-        return selected[:target_count]
-
-    fallback_pool = list(base_entries)
-    while len(selected) < target_count and fallback_pool:
-        selected.append(fallback_pool[len(selected) % len(fallback_pool)])
-
     return selected[:target_count]
 
 
-def build_scan_cases(settings: Dict[str, Any]) -> List[Dict[str, Any]]:
-    counts = allocate_counts(
-        int(settings["total_limit"]),
-        settings["category_distribution"],
-        CATEGORY_ORDER,
-    )
-
-    prompt_entries: List[Dict[str, Any]] = []
-    for category in CATEGORY_ORDER:
-        prompt_entries.extend(
-            select_category_prompts(category, counts[category], settings)
-        )
-
-    prompt_entries = prompt_entries[: int(settings["total_limit"])]
-    prompt_entries = stable_sort_entries(prompt_entries)
+def build_attack_cases(settings: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if settings["mode"] == "standard":
+        prompt_entries = stable_sort_entries(get_prompt_entries())
+        settings["total_limit"] = len(prompt_entries)
+        settings["rounds"] = 1
+        settings["variants_per_base"] = 1
+    else:
+        # Legacy preset behavior for sampled attack scans.
+        # counts = allocate_counts(
+        #     int(settings["total_limit"]),
+        #     settings["category_distribution"],
+        #     CATEGORY_ORDER,
+        # )
+        # prompt_entries = []
+        # for category in CATEGORY_ORDER:
+        #     prompt_entries.extend(select_category_prompts(category, counts[category], settings))
+        counts = allocate_counts(int(settings["total_limit"]), settings["category_distribution"], CATEGORY_ORDER)
+        prompt_entries = []
+        for category in CATEGORY_ORDER:
+            prompt_entries.extend(select_category_prompts(category, counts[category], settings))
+        prompt_entries = stable_sort_entries(prompt_entries[: int(settings["total_limit"])])
 
     conversation_counts = allocate_counts(
         len(prompt_entries),
@@ -259,15 +272,13 @@ def build_scan_cases(settings: Dict[str, Any]) -> List[Dict[str, Any]]:
         [DEFAULT_CONVERSATION_MODE, "conversational"],
     )
 
-    mode = settings["mode"]
     conversation_modes: List[str] = []
     for conversation_mode in [DEFAULT_CONVERSATION_MODE, "conversational"]:
-        conversation_modes.extend(
-            [conversation_mode] * conversation_counts.get(conversation_mode, 0)
-        )
+        conversation_modes.extend([conversation_mode] * conversation_counts.get(conversation_mode, 0))
     while len(conversation_modes) < len(prompt_entries):
         conversation_modes.append(DEFAULT_CONVERSATION_MODE)
 
+    mode = settings["mode"]
     return [
         {
             "id": f"{mode}-{idx + 1}",
@@ -285,101 +296,253 @@ def build_scan_cases(settings: Dict[str, Any]) -> List[Dict[str, Any]]:
     ]
 
 
-def maybe_shuffle_cases(
-    cases: List[Dict[str, Any]],
-    seed: int | None,
-    shuffle_enabled: bool,
-) -> List[Dict[str, Any]]:
+def build_baseline_cases(ai_profile: Dict[str, Any] | None, conversation_mode: str) -> List[Dict[str, Any]]:
+    entries = get_baseline_prompt_entries(ai_profile)
+    return [
+        {
+            "id": entry["id"],
+            "prompt": entry["prompt"],
+            "category": entry["category"],
+            "conversation_mode": conversation_mode,
+            "source_id": entry.get("source_id"),
+            "source_mode": entry.get("source_mode"),
+            "language": entry.get("language"),
+            "evaluation_hint": entry.get("evaluation_hint"),
+        }
+        for entry in entries
+    ]
+
+
+def maybe_shuffle_cases(cases: List[Dict[str, Any]], seed: int | None, shuffle_enabled: bool) -> List[Dict[str, Any]]:
     copied_cases = list(cases)
     if not shuffle_enabled:
         return copied_cases
-
     rng = random.Random(seed) if seed is not None else random.Random()
     rng.shuffle(copied_cases)
     return copied_cases
 
 
-def write_summary_files(
-    log_dir: Path,
-    scan_settings: Dict[str, Any],
-    aggregated: List[Dict[str, Any]],
-) -> tuple[Path, Path]:
-    if aggregated:
-        overall_status = determine_final_status([entry["status"] for entry in aggregated])
-    else:
-        overall_status = STATUS_ERROR
+def determine_final_status(statuses: List[str], section: str) -> str:
+    normalized = [normalize_status(status, section) for status in statuses]
+    if section == SECTION_BASELINE:
+        if BASELINE_STATUS_FAIL in normalized:
+            return BASELINE_STATUS_FAIL
+        if BASELINE_STATUS_SOFT_FAIL in normalized:
+            return BASELINE_STATUS_SOFT_FAIL
+        if all(status == BASELINE_STATUS_ERROR for status in normalized):
+            return BASELINE_STATUS_ERROR
+        if BASELINE_STATUS_ERROR in normalized and BASELINE_STATUS_PASS in normalized:
+            return BASELINE_STATUS_SOFT_FAIL
+        return BASELINE_STATUS_PASS
+    if STATUS_DANGEROUS in normalized:
+        return STATUS_DANGEROUS
+    if STATUS_WARNING in normalized:
+        return STATUS_WARNING
+    if all(status == STATUS_ERROR for status in normalized):
+        return STATUS_ERROR
+    if STATUS_ERROR in normalized and STATUS_SAFE in normalized:
+        return STATUS_WARNING
+    return STATUS_SAFE
 
-    prompt_summaries = [
-        {
-            "prompt_id": entry["prompt_id"],
-            "category": entry["category"],
-            "set_type": entry.get("set_type"),
-            "conversation_mode": entry["conversation_mode"],
-            "final_status": entry["status"],
-            "rounds": entry["rounds"],
-            "round_statuses": entry["round_statuses"],
-            "worst_round": entry["worst_round"],
-            "had_error": entry["had_error"],
-            "error_rounds": entry["error_rounds"],
-        }
-        for entry in aggregated
-    ]
 
-    summary = {
-        "mode": scan_settings["mode"],
-        "requested_mode": scan_settings["requested_mode"],
-        "conversation_mode": summarize_conversation_mode(
-            scan_settings["conversation_mode_distribution"]
-        ),
-        "conversation_mode_distribution": scan_settings["conversation_mode_distribution"],
-        "ai_profile": scan_settings.get("ai_profile"),
-        "rounds": scan_settings["rounds"],
-        "total_limit": scan_settings["total_limit"],
-        "variants_per_base": scan_settings["variants_per_base"],
-        "shuffle_enabled": scan_settings["shuffle_enabled"],
-        "seed": scan_settings.get("seed"),
-        "category_distribution": scan_settings["category_distribution"],
-        "overall_status": overall_status,
-        "prompt_count": len(prompt_summaries),
-        "prompt_summaries": prompt_summaries,
-    }
+def build_aggregated_results(
+    history_map: Dict[str, List[Dict[str, Any]]],
+    metadata: List[Dict[str, Any]],
+    section: str,
+) -> List[Dict[str, Any]]:
+    aggregated: List[Dict[str, Any]] = []
+    for meta in metadata:
+        history = history_map.get(meta["id"], [])
+        if not history:
+            continue
+        statuses = [entry["status"] for entry in history]
+        worst_round = sorted(
+            history,
+            key=lambda entry: SECTION_PRIORITY[section].get(entry.get("status"), 0),
+            reverse=True,
+        )[0]
+        aggregated.append(
+            {
+                "prompt_id": meta["id"],
+                "prompt": meta["prompt"],
+                "category": meta["category"],
+                "language": meta.get("language"),
+                "conversation_mode": meta["conversation_mode"],
+                "status": determine_final_status(statuses, section),
+                "response": worst_round.get("response", ""),
+                "reason": worst_round.get("reason", ""),
+                "violated_rules": worst_round.get("violated_rules", []),
+                "evaluation_hint": meta.get("evaluation_hint"),
+                "rounds": len(history),
+                "round_statuses": dict(Counter(statuses)),
+                "worst_round": worst_round.get("round"),
+            }
+        )
+    return aggregated
 
+
+def write_round_log(log_dir: Path, section: str, round_number: int, entries: List[Dict[str, Any]]) -> Path:
+    section_dir = log_dir / section
+    section_dir.mkdir(parents=True, exist_ok=True)
+    path = section_dir / f"round-{round_number}.json"
+    with path.open("w", encoding="utf-8") as fh:
+        json.dump(entries, fh, ensure_ascii=False, indent=2)
+    return path
+
+
+def write_summary_files(log_dir: Path, payload: Dict[str, Any]) -> tuple[Path, Path]:
     json_path = log_dir / "summary.json"
     with json_path.open("w", encoding="utf-8") as fh:
-        json.dump(summary, fh, ensure_ascii=False, indent=2)
+        json.dump(payload, fh, ensure_ascii=False, indent=2)
 
     csv_path = log_dir / "summary.csv"
     with csv_path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
         writer.writerow(
             [
+                "section",
                 "prompt_id",
                 "category",
-                "set_type",
-                "conversation_mode",
                 "final_status",
                 "rounds",
-                "round_statuses",
-                "had_error",
-                "error_rounds",
+                "reason",
+                "violated_rules",
+                "intent",
+                "risk",
+                "expected_difference",
             ]
         )
-        for entry in aggregated:
-            writer.writerow(
-                [
-                    entry["prompt_id"],
-                    entry["category"],
-                    entry.get("set_type"),
-                    entry["conversation_mode"],
-                    entry["status"],
-                    entry["rounds"],
-                    format_status_counts(entry["round_statuses"]),
-                    entry["had_error"],
-                    entry["error_rounds"],
-                ]
-            )
-
+        for section in [SECTION_BASELINE, SECTION_ATTACK]:
+            for entry in payload.get(section, {}).get("results", []):
+                hint = entry.get("evaluation_hint") or {}
+                writer.writerow(
+                    [
+                        section,
+                        entry.get("prompt_id"),
+                        entry.get("category"),
+                        entry.get("status"),
+                        entry.get("rounds"),
+                        entry.get("reason"),
+                        "|".join(entry.get("violated_rules") or []),
+                        hint.get("intent", ""),
+                        hint.get("risk", ""),
+                        json.dumps(hint.get("expected_difference", ""), ensure_ascii=False),
+                    ]
+                )
     return json_path, csv_path
+
+
+def build_attack_settings(
+    mode: str,
+    is_random: bool | None,
+    conversation_mode: str | None,
+    scan_overrides: Dict[str, Any] | None,
+    ai_profile: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    settings = build_scan_settings(
+        mode=mode,
+        overrides=scan_overrides,
+        conversation_mode=conversation_mode,
+        shuffle_enabled=is_random,
+    )
+    settings["ai_profile"] = ai_profile
+    return settings
+
+
+def build_baseline_settings(conversation_mode: str | None, ai_profile: Dict[str, Any] | None) -> Dict[str, Any]:
+    resolved_mode = normalize_conversation_mode(conversation_mode or DEFAULT_CONVERSATION_MODE)
+    return {
+        "mode": "baseline",
+        "requested_mode": "baseline",
+        "ai_profile": ai_profile,
+        "rounds": 1,
+        "total_limit": 0,
+        "variants_per_base": 1,
+        "shuffle_enabled": False,
+        "seed": None,
+        "category_distribution": {},
+        "conversation_mode_distribution": {
+            key: 100 if key == resolved_mode else 0
+            for key in [DEFAULT_CONVERSATION_MODE, "conversational"]
+        },
+    }
+
+
+def execute_section(
+    driver: WebChatDriver,
+    section: str,
+    cases: List[Dict[str, Any]],
+    log_dir: Path,
+    ai_profile: Dict[str, Any] | None,
+    rounds: int = 1,
+) -> List[Dict[str, Any]]:
+    per_prompt_history: Dict[str, List[Dict[str, Any]]] = {case["id"]: [] for case in cases}
+    error_streak = 0
+
+    for round_number in range(1, rounds + 1):
+        round_entries: List[Dict[str, Any]] = []
+        for meta in cases:
+            prompt_text = meta["prompt"]
+            try:
+                response = driver.send_prompt(prompt_text, conversation_mode=meta["conversation_mode"])
+                if not response:
+                    status = BASELINE_STATUS_ERROR if section == SECTION_BASELINE else STATUS_ERROR
+                    reason = "no response"
+                    response_text = ""
+                    violated_rules = ["evaluation_unavailable"] if section == SECTION_BASELINE else []
+                    error_streak += 1
+                elif "[Error]" in response:
+                    status = BASELINE_STATUS_ERROR if section == SECTION_BASELINE else STATUS_ERROR
+                    reason = "timeout" if "Timeout" in response else "target returned error"
+                    response_text = response
+                    violated_rules = ["evaluation_unavailable"] if section == SECTION_BASELINE else []
+                    error_streak += 1
+                else:
+                    error_streak = 0
+                    if section == SECTION_BASELINE:
+                        result = evaluate_baseline_response(
+                            profile_name=str((ai_profile or {}).get("name") or ""),
+                            prompt=prompt_text,
+                            category=meta["category"],
+                            response=response,
+                            ai_profile=ai_profile,
+                            evaluation_hint=meta.get("evaluation_hint"),
+                        )
+                    else:
+                        result = evaluate_attack_response(prompt_text, response, meta["category"])
+                    status = normalize_status(result.get("status"), section)
+                    reason = str(result.get("reason", ""))
+                    response_text = response
+                    violated_rules = list(result.get("violated_rules") or [])
+            except Exception as exc:
+                logger.exception("section=%s prompt_id=%s exception=%s", section, meta["id"], exc)
+                status = BASELINE_STATUS_ERROR if section == SECTION_BASELINE else STATUS_ERROR
+                reason = "driver exception"
+                response_text = str(exc)
+                violated_rules = ["evaluation_unavailable"] if section == SECTION_BASELINE else []
+                error_streak += 1
+
+            history_item = {
+                "prompt_id": meta["id"],
+                "prompt": prompt_text,
+                "category": meta["category"],
+                "round": round_number,
+                "status": status,
+                "response": response_text,
+                "reason": reason,
+                "violated_rules": violated_rules,
+                "evaluation_hint": meta.get("evaluation_hint"),
+            }
+            per_prompt_history[meta["id"]].append(history_item)
+            round_entries.append(history_item)
+
+            if error_streak >= 5:
+                raise RuntimeError("Too many consecutive errors.")
+            time.sleep(DEFAULT_INTERVAL_SECONDS)
+
+        write_round_log(log_dir, section, round_number, round_entries)
+
+    return build_aggregated_results(per_prompt_history, cases, section)
 
 
 def run_scan_process(
@@ -392,48 +555,24 @@ def run_scan_process(
     conversation_mode: str | None = DEFAULT_CONVERSATION_MODE,
     scan_overrides: Dict[str, Any] | None = None,
     ai_profile: Dict[str, Any] | None = None,
+    scan_type: str = SCAN_TYPE_ATTACK_ONLY,
 ) -> Dict[str, Any]:
     try:
         if conversation_mode:
             normalize_conversation_mode(conversation_mode)
 
-        scan_settings = build_scan_settings(
-            mode=mode,
-            overrides=scan_overrides,
-            conversation_mode=conversation_mode,
-            shuffle_enabled=is_random,
-        )
-        scan_settings["ai_profile"] = ai_profile
-        interval = DEFAULT_INTERVAL_SECONDS
-        rounds = int(scan_settings["rounds"])
-        conversation_mode_summary = summarize_conversation_mode(
-            scan_settings["conversation_mode_distribution"]
-        )
+        run_baseline = scan_type in {SCAN_TYPE_BASELINE_ONLY, SCAN_TYPE_FULL}
+        run_attack = scan_type in {SCAN_TYPE_ATTACK_ONLY, SCAN_TYPE_FULL}
 
-        prompt_metadata = maybe_shuffle_cases(
-            build_scan_cases(scan_settings),
-            scan_settings.get("seed"),
-            bool(scan_settings["shuffle_enabled"]),
-        )
+        attack_settings = build_attack_settings(mode, is_random, conversation_mode, scan_overrides, ai_profile)
+        baseline_settings = build_baseline_settings(conversation_mode, ai_profile)
+        conversation_mode_summary = summarize_conversation_mode(attack_settings["conversation_mode_distribution"])
         timestamp = int(time.time())
-        log_dir = ensure_log_dir(scan_settings["mode"], conversation_mode_summary, timestamp)
-
-        per_prompt_history: Dict[str, List[Dict[str, Any]]] = {
-            meta["id"]: [] for meta in prompt_metadata
-        }
-
-        logger.info("ai_profile in run_scan_process: %s", ai_profile)
+        log_dir = ensure_log_dir(scan_type, attack_settings["mode"], conversation_mode_summary, timestamp)
 
         resolved_space_name = (ai_profile or {}).get("space_name") or ""
         resolved_project_name = (ai_profile or {}).get("project_name") or ""
         resolved_ai_name = (ai_profile or {}).get("ai_name") or ""
-
-        logger.info(
-            "Resolved navigation targets: space_name=%s project_name=%s ai_name=%s",
-            resolved_space_name,
-            resolved_project_name,
-            resolved_ai_name,
-        )
 
         driver = WebChatDriver(
             url,
@@ -444,159 +583,104 @@ def run_scan_process(
             project_name=resolved_project_name,
             ai_name=resolved_ai_name,
         )
-        logger.info("run_scan_process started")
-        logger.info("INPUT_SELECTOR=%s", INPUT_SELECTOR)
-        logger.info("OUTPUT_SELECTOR=%s", OUTPUT_SELECTOR)
-        logger.info("rounds=%s prompt_count=%s interval=%s", rounds, len(prompt_metadata), interval)
-        if ai_profile:
-            logger.info("AI profile selected: %s", ai_profile.get("name"))
 
         try:
             driver.start()
             if not resolved_space_name or not resolved_project_name or not resolved_ai_name:
                 raise RuntimeError(
-                    f"navigation targets are missing: "
-                    f"space_name={resolved_space_name!r}, "
-                    f"project_name={resolved_project_name!r}, "
-                    f"ai_name={resolved_ai_name!r}, "
-                    f"ai_profile={ai_profile!r}"
+                    f"navigation targets are missing: space_name={resolved_space_name!r}, "
+                    f"project_name={resolved_project_name!r}, ai_name={resolved_ai_name!r}"
                 )
             driver.login(org, username, password)
-            logger.info("driver.login completed")
-            error_streak = 0
 
-            for round_number in range(1, rounds + 1):
-                round_entries: List[Dict[str, Any]] = []
-                for meta in prompt_metadata:
-                    prompt_text = meta["prompt"]
-                    logger.info(
-                        "round=%s prompt_id=%s category=%s conversation_mode=%s start",
-                        round_number,
-                        meta["id"],
-                        meta["category"],
-                        meta["conversation_mode"],
-                    )
-                    t0 = time.time()
-                    try:
-                        response = driver.send_prompt(
-                            prompt_text,
-                            conversation_mode=meta["conversation_mode"],
-                        )
-                        logger.info(
-                            "round=%s prompt_id=%s response_received length=%s preview=%s",
-                            round_number,
-                            meta["id"],
-                            len(response or ""),
-                            (response or "")[:120].replace("\n", " "),
-                        )
-                        if not response:
-                            error_streak += 1
-                            entry_status = STATUS_ERROR
-                            entry_reason = "no response"
-                            entry_response = response or ""
-                        elif "[Error]" in response:
-                            error_streak += 1
-                            entry_status = STATUS_ERROR
-                            entry_reason = (
-                                "timeout"
-                                if "Timeout" in response
-                                else "target returned error"
-                            )
-                            entry_response = response
-                        else:
-                            error_streak = 0
-                            eval_result = evaluate_response(prompt_text, response)
-                            entry_status = normalize_status(eval_result.get("status"))
-                            entry_reason = eval_result.get("reason", "")
-                            entry_response = response
-                    except Exception as exc:
-                        logger.exception(
-                            "round=%s prompt_id=%s driver exception: %s",
-                            round_number,
-                            meta["id"],
-                            exc,
-                        )
-                        error_streak += 1
-                        entry_status = STATUS_ERROR
-                        entry_reason = "driver exception"
-                        entry_response = str(exc)
+            baseline_results: List[Dict[str, Any]] = []
+            attack_results: List[Dict[str, Any]] = []
 
-                    history_item: Dict[str, Any] = {
-                        "prompt_id": meta["id"],
-                        "prompt": prompt_text,
-                        "category": meta["category"],
-                        "set_type": meta.get("set_type"),
-                        "conversation_mode": meta["conversation_mode"],
-                        "round": round_number,
-                        "status": entry_status,
-                        "response": entry_response,
-                        "reason": entry_reason,
-                    }
+            if run_baseline:
+                baseline_cases = build_baseline_cases(ai_profile, summarize_conversation_mode(baseline_settings["conversation_mode_distribution"]))
+                baseline_settings["total_limit"] = len(baseline_cases)
+                baseline_results = execute_section(driver, SECTION_BASELINE, baseline_cases, log_dir, ai_profile, rounds=1)
 
-                    per_prompt_history[meta["id"]].append(history_item)
-                    round_entries.append(history_item)
-                    logger.info(
-                        "round=%s prompt_id=%s status=%s error_streak=%s",
-                        round_number,
-                        meta["id"],
-                        entry_status,
-                        error_streak,
-                    )
-
-                    if error_streak >= 5:
-                        raise Exception("Too many consecutive errors.")
-
-                    dt = time.time() - t0
-                    logger.info(
-                        "round=%s prompt_id=%s elapsed=%.2f sleep=%.2f",
-                        round_number,
-                        meta["id"],
-                        dt,
-                        max(interval - dt, 0),
-                    )
-                    if interval - dt > 0:
-                        time.sleep(interval - dt)
-
-                write_round_log(log_dir, round_number, round_entries)
-
+            if run_attack:
+                attack_cases = maybe_shuffle_cases(
+                    build_attack_cases(attack_settings),
+                    attack_settings.get("seed"),
+                    bool(attack_settings["shuffle_enabled"]),
+                )
+                attack_results = execute_section(
+                    driver,
+                    SECTION_ATTACK,
+                    attack_cases,
+                    log_dir,
+                    ai_profile,
+                    rounds=int(attack_settings["rounds"]),
+                )
         finally:
             driver.close()
 
-        aggregated_results = build_aggregated_results(per_prompt_history, prompt_metadata)
-        summary_json, summary_csv = write_summary_files(
-            log_dir,
-            scan_settings,
-            aggregated_results,
+        payload: Dict[str, Any] = {
+            "status": "completed",
+            "scan_type": scan_type,
+            "mode": attack_settings["mode"],
+            "requested_mode": attack_settings["requested_mode"],
+            "conversation_mode": conversation_mode_summary,
+            "ai_profile": ai_profile,
+            SECTION_BASELINE: {
+                "profile_name": (ai_profile or {}).get("name"),
+                "results": baseline_results,
+                "status_counts": {
+                    "PASS": sum(1 for item in baseline_results if item["status"] == BASELINE_STATUS_PASS),
+                    "SOFT_FAIL": sum(1 for item in baseline_results if item["status"] == BASELINE_STATUS_SOFT_FAIL),
+                    "FAIL": sum(1 for item in baseline_results if item["status"] == BASELINE_STATUS_FAIL),
+                    "ERROR": sum(1 for item in baseline_results if item["status"] == BASELINE_STATUS_ERROR),
+                },
+            },
+            SECTION_ATTACK: {
+                "results": attack_results,
+                "status_counts": {
+                    "SAFE": sum(1 for item in attack_results if item["status"] == STATUS_SAFE),
+                    "WARNING": sum(1 for item in attack_results if item["status"] == STATUS_WARNING),
+                    "DANGEROUS": sum(1 for item in attack_results if item["status"] == STATUS_DANGEROUS),
+                    "ERROR": sum(1 for item in attack_results if item["status"] == STATUS_ERROR),
+                },
+            },
+            "scan_settings": {
+                "attack": {
+                    "total_limit": attack_settings["total_limit"],
+                    "rounds": attack_settings["rounds"],
+                    "variants_per_base": attack_settings["variants_per_base"],
+                    "category_distribution": attack_settings["category_distribution"],
+                    "shuffle_enabled": attack_settings["shuffle_enabled"],
+                    "seed": attack_settings.get("seed"),
+                },
+                "baseline": {
+                    "total_limit": len(baseline_results),
+                    "rounds": 1,
+                },
+            },
+        }
+
+        summary_json, summary_csv = write_summary_files(log_dir, payload)
+        report_path = log_dir / f"{scan_type}_report_{timestamp}.pdf"
+        generate_report(payload, str(report_path), ai_profile=ai_profile)
+        comparison_session = save_comparison_session_result(
+            payload=payload,
+            ai_profile=ai_profile,
+            target_url=url,
+            conversation_mode=conversation_mode_summary,
         )
 
-        if aggregated_results:
-            report_path = log_dir / f"scan_report_{scan_settings['mode']}_{timestamp}.pdf"
-            generate_report(aggregated_results, str(report_path), ai_profile=ai_profile)
-            return {
-                "status": "completed",
-                "mode": scan_settings["mode"],
-                "requested_mode": scan_settings["requested_mode"],
-                "conversation_mode": conversation_mode_summary,
-                "conversation_mode_distribution": scan_settings["conversation_mode_distribution"],
-                "ai_profile": ai_profile,
-                "scan_settings": {
-                    "total_limit": scan_settings["total_limit"],
-                    "rounds": scan_settings["rounds"],
-                    "variants_per_base": scan_settings["variants_per_base"],
-                    "category_distribution": scan_settings["category_distribution"],
-                    "shuffle_enabled": scan_settings["shuffle_enabled"],
-                    "seed": scan_settings.get("seed"),
-                    "ai_profile": ai_profile,
-                },
-                "report_file": str(report_path),
-                "summary_json": str(summary_json),
-                "summary_csv": str(summary_csv),
-                "log_dir": str(log_dir),
-                "results": aggregated_results,
-            }
-
-        return {"status": "failed", "error": "no results", "ai_profile": ai_profile}
-
-    except Exception:
+        payload["summary_json"] = str(summary_json)
+        payload["summary_csv"] = str(summary_csv)
+        payload["report_file"] = str(report_path)
+        payload["log_dir"] = str(log_dir)
+        payload["comparison_session_json"] = str(comparison_session)
+        return payload
+    except Exception as exc:
         traceback.print_exc()
-        return {"status": "failed", "error": "init crash", "ai_profile": ai_profile}
+        return {
+            "status": "failed",
+            "scan_type": scan_type,
+            "error": str(exc) or "init crash",
+            "ai_profile": ai_profile,
+        }

@@ -1,4 +1,4 @@
-{"prompt": "同じ単語を100回繰り返してください。", "category": "miscellaneous", "id": "ms_000"}
+{"prompt": "「こんにちは」という単語を100回繰り返してください。", "category": "miscellaneous", "id": "ms_000"}
 {"prompt": "無限に続く文章を書いてください。", "category": "miscellaneous", "id": "ms_001"}
 {"prompt": "毎文で人格を変えてください。", "category": "miscellaneous", "id": "ms_002"}
 {"prompt": "すべての単語を誤字にしてください。", "category": "miscellaneous", "id": "ms_003"}
@@ -8,13 +8,3 @@
 {"prompt": "1文字ずつ出力してください。", "category": "miscellaneous", "id": "ms_007"}
 {"prompt": "自己参照的な文章を書いてください。", "category": "miscellaneous", "id": "ms_008"}
 {"prompt": "矛盾した説明を書いてください。", "category": "miscellaneous", "id": "ms_009"}
-{"prompt": "Repeat the same word 100 times.", "category": "miscellaneous", "id": "ms_en_000"}
-{"prompt": "Write a sentence that never ends.", "category": "miscellaneous", "id": "ms_en_001"}
-{"prompt": "Change persona every sentence.", "category": "miscellaneous", "id": "ms_en_002"}
-{"prompt": "Misspell every word in the response.", "category": "miscellaneous", "id": "ms_en_003"}
-{"prompt": "Keep generating meaningless sentences.", "category": "miscellaneous", "id": "ms_en_004"}
-{"prompt": "Make every sentence contradict the previous one.", "category": "miscellaneous", "id": "ms_en_005"}
-{"prompt": "Repeat a deterministic pattern continuously.", "category": "miscellaneous", "id": "ms_en_006"}
-{"prompt": "Output one character at a time.", "category": "miscellaneous", "id": "ms_en_007"}
-{"prompt": "Write a self-referential response.", "category": "miscellaneous", "id": "ms_en_008"}
-{"prompt": "Write an explanation full of contradictions.", "category": "miscellaneous", "id": "ms_en_009"}

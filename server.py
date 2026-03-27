@@ -20,7 +20,12 @@ from config.scan_presets import (
     export_scan_options,
     get_allowed_scan_modes,
 )
-from scan_manager import run_scan_process
+from scan_manager import generate_comparison_report_from_session, run_scan_process
+from report_generator import (
+    build_comparison_report_view_data,
+    build_single_report_view_data,
+)
+from scan_manager import comparison_session_path
 
 app = FastAPI()
 
@@ -41,6 +46,7 @@ AI_PROFILES_PATH = os.path.join(os.path.dirname(__file__), "backend", "ai_profil
 
 class ScanRequest(BaseModel):
     url: str
+    scan_type: str = "full_scan"
     mode: str = "standard"
     ai_profile_name: str | None = None
     is_random: bool | None = None
@@ -52,6 +58,14 @@ class ScanRequest(BaseModel):
     conversation_mode_distribution: Dict[str, int] | None = None
     shuffle_enabled: bool | None = None
     seed: int | None = None
+
+
+class ComparisonReportResponse(BaseModel):
+    status: str
+    report_file: str
+    session_json: str
+    session_id: str | None = None
+    profile_count: int = 0
 
 
 def load_ai_profiles() -> List[Dict[str, Any]]:
@@ -128,6 +142,7 @@ def run_scan_job(job_id: str, req: ScanRequest) -> None:
             req.conversation_mode,
             build_scan_overrides(req),
             ai_profile=ai_profile,
+            scan_type=req.scan_type,
         )
         status = result.get("status", "failed")
         update_job(
@@ -155,7 +170,14 @@ def read_root():
 
 @app.get("/api/scan/options")
 def get_scan_options():
-    return export_scan_options()
+    payload = export_scan_options()
+    payload["scan_types"] = [
+        {"key": "full_scan", "label": "標準スキャン", "description": "attack prompt 全件と baseline prompt 全件をまとめて診断します"},
+        # {"key": "attack_only", "label": "Attack Scan", "description": "既存の攻撃系プロンプトで診断します"},
+        # {"key": "baseline_only", "label": "Baseline Scan", "description": "AI設定どおりに振る舞うか診断します"},
+        # {"key": "full_scan", "label": "Full Scan", "description": "baseline と attack をまとめて診断します"},
+    ]
+    return payload
 
 
 @app.get("/api/ai-profiles")
@@ -163,8 +185,50 @@ def get_ai_profiles():
     return load_ai_profiles()
 
 
+@app.post("/api/scan/comparison-report", response_model=ComparisonReportResponse)
+def create_comparison_report():
+    try:
+        result = generate_comparison_report_from_session()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "status": "completed",
+        "report_file": result["report_file"],
+        "session_json": result["session_json"],
+        "session_id": result.get("session_id"),
+        "profile_count": result.get("profile_count", 0),
+    }
+
+
+@app.get("/api/reports/single/{job_id}")
+def get_single_html_report(job_id: str):
+    with JOB_LOCK:
+        job = JOB_STORE.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="job not found")
+        payload = dict(job)
+
+    result = payload.get("result") or {}
+    if payload.get("status") != "completed" or result.get("status") != "completed":
+        raise HTTPException(status_code=400, detail="job not completed")
+
+    return build_single_report_view_data(result, ai_profile=payload.get("ai_profile"))
+
+
+@app.get("/api/reports/comparison")
+def get_comparison_html_report():
+    path = comparison_session_path()
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="comparison session json not found")
+    session_data = json.loads(path.read_text(encoding="utf-8"))
+    return build_comparison_report_view_data(session_data)
+
+
 @app.post("/api/scan")
 def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
+    if req.scan_type not in {"attack_only", "baseline_only", "full_scan"}:
+        raise HTTPException(status_code=400, detail="invalid scan_type")
     if req.mode not in ALLOWED_SCAN_MODES:
         raise HTTPException(status_code=400, detail="invalid mode")
     if req.conversation_mode and req.conversation_mode not in ALLOWED_CONVERSATION_MODES:
@@ -189,6 +253,7 @@ def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
             "job_id": job_id,
             "status": "queued",
             "created_at": datetime.utcnow().isoformat(),
+            "scan_type": req.scan_type,
             "mode": resolved_settings["mode"],
             "requested_mode": req.mode,
             "is_random": resolved_settings["shuffle_enabled"],
@@ -212,6 +277,7 @@ def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
 
     return {
         "status": "accepted",
+        "scan_type": req.scan_type,
         "job_id": job_id,
         "mode": resolved_settings["mode"],
         "requested_mode": req.mode,
@@ -238,6 +304,7 @@ def get_scan_status(job_id: str):
         payload["summary_csv"] = result.get("summary_csv")
         payload["report_file"] = result.get("report_file")
         payload["log_dir"] = result.get("log_dir")
+        payload["comparison_session_json"] = result.get("comparison_session_json")
         payload["error"] = result.get("error")
 
     return payload

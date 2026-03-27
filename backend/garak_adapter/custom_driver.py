@@ -1,5 +1,6 @@
 import time
 import logging
+import re
 from typing import Optional, Sequence
 from playwright.sync_api import (
     sync_playwright,
@@ -7,15 +8,13 @@ from playwright.sync_api import (
     Browser,
     BrowserContext,
     Page,
+    TimeoutError as PlaywrightTimeoutError,
 )
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONVERSATION_MODE = "clean_chat"
-CONVERSATIONAL_WARMUP_PROMPTS = [
-    "こんにちは",
-    "このサービスでは何ができますか？",
-]
+DEFAULT_SPACE_NAME = "検証用組織1"
 
 
 class WebChatDriver:
@@ -115,15 +114,50 @@ class WebChatDriver:
         logger.info("Waiting for space selection screen")
         self.page.wait_for_url("**/spaces", timeout=30000)
         logger.info("Space selection URL reached: %s", self.page.url)
-        self.page.wait_for_timeout(3000)
 
-        if not self.space_name:
+        try:
+            self.page.wait_for_load_state("networkidle", timeout=10000)
+        except Exception:
+            logger.info("Continuing without networkidle on /spaces")
+
+        space_name = (self.space_name or DEFAULT_SPACE_NAME).strip()
+        if not space_name:
             raise RuntimeError("space_name is not set")
 
-        logger.info("Selecting space: %s", self.space_name)
-        target = self.page.locator("button").filter(has_text=self.space_name).first
-        target.wait_for(state="visible", timeout=15000)
-        target.click()
+        logger.info("Selecting space by visible text: %s", space_name)
+        target = self.page.get_by_role("button", name=space_name, exact=True)
+
+        try:
+            target.wait_for(state="visible", timeout=15000)
+        except PlaywrightTimeoutError:
+            logger.info("Exact role match not found, retrying with text-based button locator")
+            target = self.page.locator(
+                "button",
+                has_text=re.compile(rf"^\s*{re.escape(space_name)}\s*$"),
+            )
+            target.wait_for(state="visible", timeout=15000)
+
+        target.scroll_into_view_if_needed()
+        previous_url = self.page.url
+
+        try:
+            target.click(timeout=10000)
+        except PlaywrightTimeoutError:
+            logger.info("Retrying space click with force=True")
+            target.click(timeout=10000, force=True)
+
+        try:
+            self.page.wait_for_function(
+                """(previousUrl) => {
+                    return window.location.href !== previousUrl
+                        || !window.location.pathname.endsWith('/spaces')
+                        || document.querySelectorAll('a').length > 0;
+                }""",
+                arg=previous_url,
+                timeout=15000,
+            )
+        except PlaywrightTimeoutError:
+            logger.info("No immediate post-space state change detected after click")
 
         try:
             self.page.wait_for_load_state("networkidle", timeout=15000)

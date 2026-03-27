@@ -43,7 +43,7 @@ def load_fallback_prompt_catalog():
 def normalize_prompt_entry(raw_entry, source_mode: str, source_index: int):
     prompt = str(raw_entry.get("prompt", "")).strip()
     category = str(raw_entry.get("category", "")).strip()
-    set_type = str(raw_entry.get("set_type", "")).strip()
+    set_type = str(raw_entry.get("set_type") or SET_TYPE_REPRESENTATIVE).strip()
     if not prompt or not category or not set_type:
         return None
 
@@ -53,7 +53,7 @@ def normalize_prompt_entry(raw_entry, source_mode: str, source_index: int):
         "set_type": set_type,
         "source_mode": str(raw_entry.get("source_mode") or source_mode).strip(),
         "source_index": source_index,
-        "source_id": str(raw_entry.get("source_id") or f"{source_mode}_{source_index}").strip(),
+        "source_id": str(raw_entry.get("source_id") or raw_entry.get("id") or f"{source_mode}_{source_index}").strip(),
         "base_source_id": str(raw_entry.get("base_source_id") or "").strip() or None,
         "variant_type": str(raw_entry.get("variant_type") or "").strip() or None,
         "language": str(raw_entry.get("language") or "").strip() or None,
@@ -82,7 +82,7 @@ def load_external_prompt_catalog(data_dir: Path):
             lines = path.read_text(encoding="utf-8").splitlines()
             for index, line in enumerate(lines):
                 line = line.strip()
-                if not line:
+                if not line or line.startswith("//"):
                     continue
                 raw_entry = json.loads(line)
                 if not isinstance(raw_entry, dict):
@@ -102,6 +102,15 @@ def load_external_prompt_catalog(data_dir: Path):
 
 
 def build_prompt_catalog():
+    if PROMPT_DATA_DIR.exists():
+        external_catalog = load_external_prompt_catalog(PROMPT_DATA_DIR)
+        if external_catalog:
+            return external_catalog
+        raise RuntimeError(
+            f"No valid external prompts found in {PROMPT_DATA_DIR}. "
+            "Fallback catalog is disabled; fix the JSON/JSONL prompt files."
+        )
+
     external_catalog = load_external_prompt_catalog(PROMPT_DATA_DIR)
     if external_catalog:
         return external_catalog

@@ -35,52 +35,10 @@ CONVERSATION_MODE_LABELS: Dict[str, str] = {
 }
 
 SCAN_PRESET_CONFIGS: Dict[str, Dict[str, Any]] = {
-    "test": {
-        "label": "テスト実行",
-        "description": "3件だけ実行して動作確認します",
-        "total_limit": 3,
-        "rounds": 1,
-        "variants_per_base": 1,
-        "conversation_mode_distribution": {
-            "clean_chat": 100,
-            "conversational": 0,
-        },
-        "category_distribution": {
-            "prompt_injection": 34,
-            "jailbreak": 33,
-            "output_handling": 33,
-            "excessive_agency": 0,
-            "miscellaneous": 0,
-        },
-        "shuffle_enabled": True,
-        "seed": None,
-        "set_types": (SET_TYPE_REPRESENTATIVE,),
-    },
-    "light": {
-        "label": "簡単スキャン",
-        "description": "短時間でざっと確認します",
-        "total_limit": 20,
-        "rounds": 1,
-        "variants_per_base": 1,
-        "conversation_mode_distribution": {
-            "clean_chat": 80,
-            "conversational": 20,
-        },
-        "category_distribution": {
-            "prompt_injection": 30,
-            "jailbreak": 25,
-            "output_handling": 15,
-            "excessive_agency": 20,
-            "miscellaneous": 10,
-        },
-        "shuffle_enabled": True,
-        "seed": None,
-        "set_types": (SET_TYPE_REPRESENTATIVE,),
-    },
     "standard": {
         "label": "標準スキャン",
-        "description": "一般的な安全性を確認します",
-        "total_limit": 60,
+        "description": "attack prompt 全件と baseline prompt 全件をまとめて実行します",
+        "total_limit": 1,
         "rounds": 1,
         "variants_per_base": 1,
         "conversation_mode_distribution": {
@@ -98,38 +56,82 @@ SCAN_PRESET_CONFIGS: Dict[str, Dict[str, Any]] = {
         "seed": None,
         "set_types": (SET_TYPE_REPRESENTATIVE, SET_TYPE_HIGH_RISK),
     },
-    "full": {
-        "label": "フルスキャン",
-        "description": "より多くの攻撃パターンで詳しく確認します",
-        "total_limit": 200,
-        "rounds": 3,
-        "variants_per_base": 3,
-        "conversation_mode_distribution": {
-            "clean_chat": 50,
-            "conversational": 50,
-        },
-        "category_distribution": {
-            "prompt_injection": 25,
-            "jailbreak": 20,
-            "output_handling": 20,
-            "excessive_agency": 25,
-            "miscellaneous": 10,
-        },
-        "shuffle_enabled": True,
-        "seed": None,
-        "set_types": (
-            SET_TYPE_REPRESENTATIVE,
-            SET_TYPE_HIGH_RISK,
-            SET_TYPE_STABILITY,
-        ),
-    },
 }
 
+# Legacy presets kept here for easy restoration.
+# "test": {
+#     "label": "テスト実行",
+#     "description": "3件だけ実行して動作確認します",
+#     "total_limit": 3,
+#     "rounds": 1,
+#     "variants_per_base": 1,
+#     "conversation_mode_distribution": {
+#         "clean_chat": 100,
+#         "conversational": 0,
+#     },
+#     "category_distribution": {
+#         "prompt_injection": 34,
+#         "jailbreak": 33,
+#         "output_handling": 33,
+#         "excessive_agency": 0,
+#         "miscellaneous": 0,
+#     },
+#     "shuffle_enabled": True,
+#     "seed": None,
+#     "set_types": (SET_TYPE_REPRESENTATIVE,),
+# },
+# "light": {
+#     "label": "簡単スキャン",
+#     "description": "短時間でざっと確認します",
+#     "total_limit": 20,
+#     "rounds": 1,
+#     "variants_per_base": 1,
+#     "conversation_mode_distribution": {
+#         "clean_chat": 80,
+#         "conversational": 20,
+#     },
+#     "category_distribution": {
+#         "prompt_injection": 30,
+#         "jailbreak": 25,
+#         "output_handling": 15,
+#         "excessive_agency": 20,
+#         "miscellaneous": 10,
+#     },
+#     "shuffle_enabled": True,
+#     "seed": None,
+#     "set_types": (SET_TYPE_REPRESENTATIVE,),
+# },
+# "full": {
+#     "label": "フルスキャン",
+#     "description": "より多くの攻撃パターンで詳しく確認します",
+#     "total_limit": 200,
+#     "rounds": 3,
+#     "variants_per_base": 3,
+#     "conversation_mode_distribution": {
+#         "clean_chat": 50,
+#         "conversational": 50,
+#     },
+#     "category_distribution": {
+#         "prompt_injection": 25,
+#         "jailbreak": 20,
+#         "output_handling": 20,
+#         "excessive_agency": 25,
+#         "miscellaneous": 10,
+#     },
+#     "shuffle_enabled": True,
+#     "seed": None,
+#     "set_types": (
+#         SET_TYPE_REPRESENTATIVE,
+#         SET_TYPE_HIGH_RISK,
+#         SET_TYPE_STABILITY,
+#     ),
+# },
+
 LEGACY_MODE_ALIASES: Dict[str, str] = {
-    "smoke": "light",
     "risk_discovery": "standard",
     "stability_audit": "standard",
-    "full_assessment": "full",
+    # "smoke": "light",
+    # "full_assessment": "full",
 }
 
 
