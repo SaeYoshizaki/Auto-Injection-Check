@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type ScanStatus = "idle" | "loading" | "success" | "error";
@@ -33,6 +34,7 @@ type ScanOptionsResponse = {
 
 type ScanResponse = {
   status: string;
+  scan_type?: "attack_only" | "baseline_only" | "full_scan";
   job_id: string;
   mode: string;
   requested_mode?: string;
@@ -42,6 +44,7 @@ type ScanResponse = {
 
 type ScanJobResult = {
   status: JobState | string;
+  scan_type?: "attack_only" | "baseline_only" | "full_scan";
   job_id: string;
   mode?: string;
   requested_mode?: string;
@@ -54,13 +57,23 @@ type ScanJobResult = {
   summary_csv?: string;
   report_file?: string;
   log_dir?: string;
+  comparison_session_json?: string;
   result?: {
     status?: string;
     report_file?: string;
     summary_json?: string;
     summary_csv?: string;
     log_dir?: string;
+    comparison_session_json?: string;
   };
+};
+
+type ComparisonReportResponse = {
+  status: string;
+  report_file: string;
+  session_json: string;
+  session_id?: string | null;
+  profile_count?: number;
 };
 
 type AIProfile = {
@@ -82,6 +95,7 @@ type AIProfile = {
 };
 
 const API_BASE = "http://127.0.0.1:8000";
+const STANDARD_SCAN_TYPE = "full_scan";
 
 const cloneSettings = (settings: ScanSettings): ScanSettings => ({
   total_limit: settings.total_limit,
@@ -98,21 +112,15 @@ const cloneSettings = (settings: ScanSettings): ScanSettings => ({
 const sumDistribution = (distribution: Distribution) =>
   Object.values(distribution).reduce((total, value) => total + value, 0);
 
-const settingsEqual = (left: ScanSettings, right: ScanSettings) =>
-  JSON.stringify(left) === JSON.stringify(right);
-
 export default function Home() {
   const [formData, setFormData] = useState({
-    url: "https://beta.kanata.app/ja/",
+    url: "https://dev.kanata.app/ja/",
     mode: "",
   });
   const [aiProfiles, setAiProfiles] = useState<AIProfile[]>([]);
   const [selectedAIName, setSelectedAIName] = useState("");
   const [options, setOptions] = useState<ScanOptionsResponse | null>(null);
   const [scanSettings, setScanSettings] = useState<ScanSettings | null>(null);
-  const [draftSettings, setDraftSettings] = useState<ScanSettings | null>(null);
-  const [isCustomSettings, setIsCustomSettings] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [status, setStatus] = useState<ScanStatus>("idle");
   const [message, setMessage] = useState("");
   const [jobId, setJobId] = useState("");
@@ -122,11 +130,14 @@ export default function Home() {
     summary_csv?: string;
     report_file?: string;
     log_dir?: string;
+    comparison_session_json?: string;
   }>({});
+  const [comparisonStatus, setComparisonStatus] = useState<ScanStatus>("idle");
+  const [comparisonMessage, setComparisonMessage] = useState("");
+  const [comparisonReportFile, setComparisonReportFile] = useState("");
 
   const selectedPreset =
     options?.modes.find((preset) => preset.key === formData.mode) ?? null;
-
   const selectedAIProfile =
     aiProfiles.find((profile) => profile.name === selectedAIName) ?? null;
 
@@ -179,73 +190,6 @@ export default function Home() {
   const handlePresetSelect = (preset: PresetOption) => {
     setFormData((prev) => ({ ...prev, mode: preset.key }));
     setScanSettings(cloneSettings(preset.settings));
-    setIsCustomSettings(false);
-  };
-
-  const openSettingsModal = () => {
-    if (!scanSettings) {
-      return;
-    }
-    setDraftSettings(cloneSettings(scanSettings));
-    setIsSettingsOpen(true);
-  };
-
-  const closeSettingsModal = () => {
-    setIsSettingsOpen(false);
-    setDraftSettings(null);
-  };
-
-  const updateDraftNumber = (
-    key: "total_limit" | "rounds" | "variants_per_base",
-    value: string
-  ) => {
-    setDraftSettings((prev) =>
-      prev
-        ? {
-            ...prev,
-            [key]: Math.max(1, Number(value) || 1),
-          }
-        : prev
-    );
-  };
-
-  const updateDraftDistribution = (
-    section: "category_distribution" | "conversation_mode_distribution",
-    key: string,
-    value: string
-  ) => {
-    setDraftSettings((prev) =>
-      prev
-        ? {
-            ...prev,
-            [section]: {
-              ...prev[section],
-              [key]: Math.max(0, Number(value) || 0),
-            },
-          }
-        : prev
-    );
-  };
-
-  const saveSettings = () => {
-    if (!draftSettings || !selectedPreset) {
-      return;
-    }
-
-    const categoryTotal = sumDistribution(draftSettings.category_distribution);
-    const modeTotal = sumDistribution(
-      draftSettings.conversation_mode_distribution
-    );
-
-    if (categoryTotal !== 100 || modeTotal !== 100) {
-      setMessage("割合の合計を100%にしてください");
-      setStatus("error");
-      return;
-    }
-
-    setScanSettings(cloneSettings(draftSettings));
-    setIsCustomSettings(!settingsEqual(draftSettings, selectedPreset.settings));
-    closeSettingsModal();
   };
 
   const pollScanStatus = async (scanJobId: string) => {
@@ -266,9 +210,6 @@ export default function Home() {
         const currentStatus = String(data.status || "");
         if (currentStatus === "queued" || currentStatus === "running") {
           setJobStatus(currentStatus as JobState);
-          setMessage(
-            `スキャンを実行中です\nジョブID: ${scanJobId}\n状態: ${currentStatus}`
-          );
           await new Promise((resolve) => setTimeout(resolve, intervalMs));
           continue;
         }
@@ -278,6 +219,9 @@ export default function Home() {
           const summaryCsv = data.summary_csv || data.result?.summary_csv;
           const reportFile = data.report_file || data.result?.report_file;
           const logDir = data.log_dir || data.result?.log_dir;
+          const comparisonSessionJson =
+            data.comparison_session_json ||
+            data.result?.comparison_session_json;
 
           setJobStatus("completed");
           setStatus("success");
@@ -286,6 +230,7 @@ export default function Home() {
             summary_csv: summaryCsv,
             report_file: reportFile,
             log_dir: logDir,
+            comparison_session_json: comparisonSessionJson,
           });
           setMessage(
             `スキャンが完了しました\nジョブID: ${scanJobId}\n状態: completed`
@@ -332,7 +277,7 @@ export default function Home() {
     setJobStatus("queued");
     setJobId("");
     setResultLinks({});
-    setMessage("スキャンを開始しています...");
+    setMessage("標準スキャンを開始しています...");
 
     try {
       const res = await fetch(`${API_BASE}/api/scan`, {
@@ -340,6 +285,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           url: formData.url,
+          scan_type: STANDARD_SCAN_TYPE,
           mode: formData.mode,
           ai_profile_name: selectedAIName,
           is_random: scanSettings.shuffle_enabled,
@@ -367,8 +313,8 @@ export default function Home() {
         `スキャンを受け付けました\nジョブID: ${
           data.job_id
         }\n対象AI: ${selectedAIName}\nモード: ${
-          selectedPreset?.label ?? formData.mode
-        }${isCustomSettings ? "（カスタム設定）" : ""}\n状態: queued`
+          selectedPreset?.label ?? "標準スキャン"
+        }\n状態: queued`
       );
 
       await pollScanStatus(data.job_id);
@@ -379,22 +325,43 @@ export default function Home() {
     }
   };
 
+  const handleComparisonReport = async () => {
+    setComparisonStatus("loading");
+    setComparisonMessage("比較レポートを生成しています...");
+    setComparisonReportFile("");
+    try {
+      const res = await fetch(`${API_BASE}/api/scan/comparison-report`, {
+        method: "POST",
+      });
+      const data: ComparisonReportResponse = await res.json();
+      if (!res.ok) {
+        setComparisonStatus("error");
+        setComparisonMessage("比較レポートの生成に失敗しました");
+        return;
+      }
+      setComparisonStatus("success");
+      setComparisonReportFile(data.report_file);
+      setComparisonMessage(
+        `比較レポートを出力しました\nセッション: ${
+          data.session_id ?? "-"
+        }\n対象AI数: ${data.profile_count ?? 0}`
+      );
+    } catch (error) {
+      console.error(error);
+      setComparisonStatus("error");
+      setComparisonMessage("比較レポートAPIへ接続できませんでした");
+    }
+  };
+
   if (!options || !scanSettings || aiProfiles.length === 0) {
     return (
-      <main className="min-h-screen bg-stone-100 flex items-center justify-center p-6 text-stone-900">
+      <main className="min-h-screen flex items-center justify-center bg-stone-100 p-6 text-stone-900">
         <div className="w-full max-w-xl rounded-3xl border border-stone-200 bg-white p-8 shadow-sm">
           設定を読み込んでいます...
         </div>
       </main>
     );
   }
-
-  const draftCategoryTotal = draftSettings
-    ? sumDistribution(draftSettings.category_distribution)
-    : 0;
-  const draftConversationTotal = draftSettings
-    ? sumDistribution(draftSettings.conversation_mode_distribution)
-    : 0;
 
   return (
     <main className="min-h-screen bg-stone-100 p-6 text-stone-900">
@@ -406,27 +373,18 @@ export default function Home() {
             </h1>
 
             <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-sm font-medium text-stone-700">
-                    URL
-                  </label>
-                  <input
-                    type="text"
-                    name="url"
-                    value={formData.url}
-                    onChange={handleTextChange}
-                    className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-amber-500"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800">
-                ログイン情報は画面から入力せず、ローカル環境変数から読み込みます。
-                <div className="mt-2 font-mono text-xs text-sky-900">
-                  KANATA_USER_ID / KANATA_PASSWORD
-                </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-stone-700">
+                  URL
+                </label>
+                <input
+                  type="text"
+                  name="url"
+                  value={formData.url}
+                  onChange={handleTextChange}
+                  className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 outline-none transition focus:border-amber-500"
+                  required
+                />
               </div>
 
               <div className="rounded-[24px] border border-stone-200 bg-stone-50 p-5">
@@ -488,22 +446,15 @@ export default function Home() {
               </div>
 
               <div className="rounded-[24px] border border-stone-200 bg-stone-50 p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-semibold text-stone-800">
-                      スキャンの種類
-                    </h2>
-                    <p className="text-xs text-stone-500">
-                      初めて使う場合は「標準スキャン」がおすすめです。
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={openSettingsModal}
-                    className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-400"
-                  >
-                    詳細設定
-                  </button>
+                <div>
+                  <h2 className="text-sm font-semibold text-stone-800">
+                    標準スキャン
+                  </h2>
+                  <p className="text-xs text-stone-500">
+                    `backend/data/prompts` の attack prompt 全件と
+                    `backend/data/baseline_prompts.json` の baseline prompt を
+                    1回のジョブでまとめて実行します。
+                  </p>
                 </div>
 
                 <div className="mt-4 grid gap-3">
@@ -520,10 +471,8 @@ export default function Home() {
                             : "border-stone-200 bg-white hover:border-stone-300"
                         }`}
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-semibold">
-                            {preset.label}
-                          </span>
+                        <div className="text-lg font-semibold">
+                          {preset.label}
                         </div>
                         <p className="mt-1 text-sm text-stone-600">
                           {preset.description}
@@ -532,6 +481,14 @@ export default function Home() {
                     );
                   })}
                 </div>
+
+                {/* 将来 scan type を復活させる場合の UI
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <button type="button">Attack Scan</button>
+                  <button type="button">Baseline Scan</button>
+                  <button type="button">Full Scan</button>
+                </div>
+                */}
               </div>
 
               <button
@@ -544,8 +501,23 @@ export default function Home() {
                 }`}
               >
                 {status === "loading"
-                  ? "スキャンを実行中..."
-                  : "この設定でスキャンを実行"}
+                  ? "標準スキャンを実行中..."
+                  : "標準スキャンを実行"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleComparisonReport}
+                disabled={comparisonStatus === "loading"}
+                className={`w-full rounded-2xl border px-5 py-4 text-base font-semibold transition ${
+                  comparisonStatus === "loading"
+                    ? "cursor-not-allowed border-stone-300 bg-stone-100 text-stone-400"
+                    : "border-sky-300 bg-sky-50 text-sky-900 hover:border-sky-400"
+                }`}
+              >
+                {comparisonStatus === "loading"
+                  ? "比較レポートを生成中..."
+                  : "比較レポートを生成（PDF / HTML）"}
               </button>
             </form>
           </section>
@@ -555,8 +527,7 @@ export default function Home() {
             <div className="mt-4 space-y-4 text-sm">
               <div className="rounded-2xl bg-stone-50 p-4">
                 <div className="font-medium text-stone-800">
-                  {selectedPreset?.label}
-                  {isCustomSettings ? "（カスタム設定）" : ""}
+                  {selectedPreset?.label ?? "標準スキャン"}
                 </div>
                 <div className="mt-1 text-stone-600">
                   {selectedPreset?.description}
@@ -597,77 +568,17 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-2xl border border-stone-200 p-4">
-                  <div className="text-stone-500">総テスト数</div>
-                  <div className="mt-1 text-xl font-semibold">
-                    {scanSettings.total_limit}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-stone-200 p-4">
-                  <div className="text-stone-500">実行回数</div>
-                  <div className="mt-1 text-xl font-semibold">
-                    {scanSettings.rounds}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-stone-200 p-4">
-                  <div className="text-stone-500">攻撃パターン</div>
-                  <div className="mt-1 text-xl font-semibold">
-                    {scanSettings.variants_per_base}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-stone-200 p-4">
-                  <div className="text-stone-500">実行順</div>
-                  <div className="mt-1 text-xl font-semibold">
-                    {scanSettings.shuffle_enabled ? "ランダム" : "固定順"}
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-stone-200 p-4">
-                <div className="font-medium text-stone-800">
-                  攻撃カテゴリの割合
-                </div>
-                <div className="mt-3 space-y-2">
-                  {Object.entries(options.category_labels).map(
-                    ([key, label]) => (
-                      <div
-                        key={key}
-                        className="flex items-center justify-between"
-                      >
-                        <span>{label}</span>
-                        <span>{scanSettings.category_distribution[key]}%</span>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-stone-200 p-4">
-                <div className="font-medium text-stone-800">
-                  会話モードの割合
-                </div>
-                <div className="mt-3 space-y-2">
-                  {Object.entries(options.conversation_mode_labels).map(
-                    ([key, label]) => (
-                      <div
-                        key={key}
-                        className="flex items-center justify-between"
-                      >
-                        <span>{label}</span>
-                        <span>
-                          {scanSettings.conversation_mode_distribution[key]}%
-                        </span>
-                      </div>
-                    )
-                  )}
-                </div>
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                標準スキャンでは、attack 側は `backend/data/prompts`
+                の全件、baseline 側は `backend/data/baseline_prompts.json`
+                を実行します。結果は単体 PDF / JSON / CSV と比較用 JSON
+                に保存されます。
               </div>
             </div>
 
             {message && (
               <div
-                className={`mt-6 rounded-2xl border p-4 whitespace-pre-line text-sm ${
+                className={`mt-6 whitespace-pre-line rounded-2xl border p-4 text-sm ${
                   status === "success"
                     ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                     : status === "error"
@@ -695,6 +606,17 @@ export default function Home() {
                   出力ファイル
                 </h3>
                 <div className="mt-3 space-y-2 text-sm text-stone-700">
+                  {jobId && (
+                    <div>
+                      HTML:{" "}
+                      <Link
+                        href={`/reports/single/${jobId}`}
+                        className="font-medium text-sky-700 underline underline-offset-4"
+                      >
+                        単体レポート画面を開く
+                      </Link>
+                    </div>
+                  )}
                   {resultLinks.report_file && (
                     <div>PDF: {resultLinks.report_file}</div>
                   )}
@@ -707,212 +629,43 @@ export default function Home() {
                   {resultLinks.log_dir && (
                     <div>ログ: {resultLinks.log_dir}</div>
                   )}
+                  {resultLinks.comparison_session_json && (
+                    <div>比較用JSON: {resultLinks.comparison_session_json}</div>
+                  )}
                 </div>
+              </div>
+            )}
+
+            {(comparisonMessage || comparisonReportFile) && (
+              <div
+                className={`mt-6 whitespace-pre-line rounded-2xl border p-4 text-sm ${
+                  comparisonStatus === "success"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : comparisonStatus === "error"
+                    ? "border-rose-200 bg-rose-50 text-rose-800"
+                    : "border-sky-200 bg-sky-50 text-sky-800"
+                }`}
+              >
+                {comparisonMessage}
+                {comparisonReportFile && `\nPDF: ${comparisonReportFile}`}
+                {comparisonStatus === "success" &&
+                  "\nHTML: /reports/comparison"}
+              </div>
+            )}
+
+            {comparisonStatus === "success" && (
+              <div className="mt-4">
+                <Link
+                  href="/reports/comparison"
+                  className="inline-flex rounded-2xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-900 transition hover:border-sky-400"
+                >
+                  比較HTMLレポートを開く
+                </Link>
               </div>
             )}
           </aside>
         </div>
       </div>
-
-      {isSettingsOpen && draftSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/40 p-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[28px] bg-white p-6 shadow-xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-semibold">詳細設定</h2>
-                <p className="mt-1 text-sm text-stone-600">
-                  現在選択中のプリセット内容を確認し、必要なら調整できます。
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeSettingsModal}
-                className="rounded-full border border-stone-300 px-3 py-1 text-sm text-stone-600"
-              >
-                閉じる
-              </button>
-            </div>
-
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
-              <label className="block rounded-2xl border border-stone-200 p-4">
-                <span className="text-sm font-medium text-stone-700">
-                  総テスト数
-                </span>
-                <input
-                  type="number"
-                  min={1}
-                  value={draftSettings.total_limit}
-                  onChange={(e) =>
-                    updateDraftNumber("total_limit", e.target.value)
-                  }
-                  className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-2"
-                />
-              </label>
-              <label className="block rounded-2xl border border-stone-200 p-4">
-                <span className="text-sm font-medium text-stone-700">
-                  実行回数
-                </span>
-                <input
-                  type="number"
-                  min={1}
-                  value={draftSettings.rounds}
-                  onChange={(e) => updateDraftNumber("rounds", e.target.value)}
-                  className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-2"
-                />
-              </label>
-              <label className="block rounded-2xl border border-stone-200 p-4">
-                <span className="text-sm font-medium text-stone-700">
-                  攻撃パターン
-                </span>
-                <input
-                  type="number"
-                  min={1}
-                  value={draftSettings.variants_per_base}
-                  onChange={(e) =>
-                    updateDraftNumber("variants_per_base", e.target.value)
-                  }
-                  className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-2"
-                />
-              </label>
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-stone-200 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-stone-800">
-                    攻撃カテゴリの割合
-                  </div>
-                  <div className="text-xs text-stone-500">
-                    合計 {draftCategoryTotal}% / 100%
-                  </div>
-                </div>
-                <div
-                  className={`text-sm font-medium ${
-                    draftCategoryTotal === 100
-                      ? "text-emerald-700"
-                      : "text-rose-700"
-                  }`}
-                >
-                  {draftCategoryTotal === 100 ? "OK" : "要調整"}
-                </div>
-              </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                {Object.entries(options.category_labels).map(([key, label]) => (
-                  <label key={key} className="block">
-                    <span className="mb-1 block text-sm text-stone-700">
-                      {label}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={0}
-                        value={draftSettings.category_distribution[key]}
-                        onChange={(e) =>
-                          updateDraftDistribution(
-                            "category_distribution",
-                            key,
-                            e.target.value
-                          )
-                        }
-                        className="w-full rounded-xl border border-stone-300 px-3 py-2"
-                      />
-                      <span className="text-sm text-stone-500">%</span>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-stone-200 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-stone-800">
-                    会話モードの割合
-                  </div>
-                  <div className="text-xs text-stone-500">
-                    合計 {draftConversationTotal}% / 100%
-                  </div>
-                </div>
-                <div
-                  className={`text-sm font-medium ${
-                    draftConversationTotal === 100
-                      ? "text-emerald-700"
-                      : "text-rose-700"
-                  }`}
-                >
-                  {draftConversationTotal === 100 ? "OK" : "要調整"}
-                </div>
-              </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                {Object.entries(options.conversation_mode_labels).map(
-                  ([key, label]) => (
-                    <label key={key} className="block">
-                      <span className="mb-1 block text-sm text-stone-700">
-                        {label}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min={0}
-                          value={
-                            draftSettings.conversation_mode_distribution[key]
-                          }
-                          onChange={(e) =>
-                            updateDraftDistribution(
-                              "conversation_mode_distribution",
-                              key,
-                              e.target.value
-                            )
-                          }
-                          className="w-full rounded-xl border border-stone-300 px-3 py-2"
-                        />
-                        <span className="text-sm text-stone-500">%</span>
-                      </div>
-                    </label>
-                  )
-                )}
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <label className="flex items-center justify-between rounded-2xl border border-stone-200 p-4">
-                <span className="text-sm font-medium text-stone-700">
-                  実行順をランダムにする
-                </span>
-                <input
-                  type="checkbox"
-                  checked={draftSettings.shuffle_enabled}
-                  onChange={(e) =>
-                    setDraftSettings((prev) =>
-                      prev
-                        ? { ...prev, shuffle_enabled: e.target.checked }
-                        : prev
-                    )
-                  }
-                  className="h-4 w-4"
-                />
-              </label>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={closeSettingsModal}
-                className="rounded-2xl border border-stone-300 px-5 py-3 text-sm font-medium text-stone-700"
-              >
-                キャンセル
-              </button>
-              <button
-                type="button"
-                onClick={saveSettings}
-                className="rounded-2xl bg-stone-900 px-5 py-3 text-sm font-medium text-white"
-              >
-                この設定を反映する
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
