@@ -13,7 +13,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
+BASE_DIR = os.path.dirname(__file__)
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
 
 from config.scan_presets import (
     CONVERSATION_MODE_ORDER,
@@ -48,8 +50,8 @@ JOB_STORE: Dict[str, Dict[str, Any]] = {}
 JOB_LOCK = threading.Lock()
 ALLOWED_SCAN_MODES = get_allowed_scan_modes()
 ALLOWED_CONVERSATION_MODES = set(CONVERSATION_MODE_ORDER)
-AI_PROFILES_PATH = os.path.join(os.path.dirname(__file__), "backend", "ai_profiles.json")
-DATA_ROOT = Path(os.getenv("REPORT_DATA_ROOT", os.path.dirname(__file__))).resolve()
+AI_PROFILES_PATH = os.path.join(BASE_DIR, "ai_profiles.json")
+DATA_ROOT = Path(os.getenv("REPORT_DATA_ROOT", BASE_DIR)).resolve()
 JOB_CACHE_DIR = DATA_ROOT / "job_cache"
 JOB_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 

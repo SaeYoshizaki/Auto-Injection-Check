@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   AttackTrendCard,
   ComparisonReportHeader,
@@ -153,9 +154,17 @@ export default function ComparisonReportPage() {
         </section>
 
         <section id="settings">
-          <h2 className="mb-6 text-2xl font-bold text-slate-900">
-            攻撃が通りやすかった設定
-          </h2>
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-2xl font-bold text-slate-900">
+              攻撃が通りやすかった設定
+            </h2>
+            <Link
+              href="/reports/comparison/details#settings-list"
+              className="inline-flex items-center text-sm font-medium text-slate-700 underline-offset-4 transition hover:text-slate-900 hover:underline"
+            >
+              AI設定一覧を見る
+            </Link>
+          </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
             {fixedPatterns.map((pattern) => (

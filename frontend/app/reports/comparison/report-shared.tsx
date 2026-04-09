@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/table";
 import { AlertCircle, AlertTriangle, CheckCircle2 } from "lucide-react";
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
 
 export type ProfileSettingRow = {
   label: string;
@@ -358,7 +358,9 @@ function splitSettingText(value?: string) {
 function pickMatchingExample(value: string | undefined, pattern: RegExp) {
   if (!value) return null;
 
-  const matchedPart = splitSettingText(value).find((part) => pattern.test(part));
+  const matchedPart = splitSettingText(value).find((part) =>
+    pattern.test(part)
+  );
   return matchedPart ?? value.trim() ?? null;
 }
 
@@ -394,12 +396,18 @@ function extractExamplesForPattern(
   switch (patternId) {
     case "user-priority":
       return uniqueExamples([
-        pickMatchingExample(settings["その他の振る舞い設定"], USER_PRIORITY_PATTERN),
+        pickMatchingExample(
+          settings["その他の振る舞い設定"],
+          USER_PRIORITY_PATTERN
+        ),
         pickMatchingExample(settings["AI概要"], USER_PRIORITY_PATTERN),
       ]);
     case "always-answer":
       return uniqueExamples([
-        pickMatchingExample(settings["その他の振る舞い設定"], ALWAYS_ANSWER_PATTERN),
+        pickMatchingExample(
+          settings["その他の振る舞い設定"],
+          ALWAYS_ANSWER_PATTERN
+        ),
         pickMatchingExample(settings["AI概要"], ALWAYS_ANSWER_PATTERN),
       ]);
     case "no-prohibited-actions":
@@ -559,15 +567,15 @@ export function SimpleToc({
 }) {
   return (
     <nav>
-      <div className="mb-2 text-2xl font-bold text-slate-900">
-        目次
-      </div>
+      <div className="mb-2 text-2xl font-bold text-slate-900">目次</div>
       <div className="mb-2 border-b border-slate-200" />
       <ul>
         {items.map((item, index) => (
           <li
             key={item.id}
-            className={index === items.length - 1 ? "" : "border-b border-slate-200"}
+            className={
+              index === items.length - 1 ? "" : "border-b border-slate-200"
+            }
           >
             <a
               href={`#${item.id}`}
@@ -805,7 +813,11 @@ function AIProfileSettingsCard({
   profile: ComparisonReportData["profiles"][number];
 }) {
   return (
-    <Accordion type="single" collapsible className="rounded border border-slate-200 bg-white">
+    <Accordion
+      type="single"
+      collapsible
+      className="rounded border border-slate-200 bg-white"
+    >
       <AccordionItem value={profile.profile_name} className="border-none px-0">
         <AccordionTrigger className="rounded-none bg-slate-50/70 px-5 py-4 hover:bg-slate-100 hover:no-underline [&>svg]:size-5 [&>svg]:text-slate-600">
           <div className="text-left text-base font-semibold text-slate-900">
@@ -884,7 +896,9 @@ function AIProfileDetailCard({
                       個別ケースの実出力
                     </div>
                   </div>
-                  <Badge className={getSeverityBadgeColor(caseItem.profile.severity)}>
+                  <Badge
+                    className={getSeverityBadgeColor(caseItem.profile.severity)}
+                  >
                     {caseItem.profile.severity}
                   </Badge>
                 </div>
@@ -985,7 +999,9 @@ export function ComparisonDetailsSections({
           <Table>
             <TableHeader className="bg-slate-50">
               <TableRow>
-                <TableHead className="font-semibold text-slate-700">AI名</TableHead>
+                <TableHead className="font-semibold text-slate-700">
+                  AI名
+                </TableHead>
                 <TableHead className="text-right font-semibold text-emerald-700">
                   SAFE
                 </TableHead>
@@ -998,7 +1014,9 @@ export function ComparisonDetailsSections({
                 <TableHead className="text-right font-semibold text-slate-700">
                   ERROR
                 </TableHead>
-                <TableHead className="font-semibold text-slate-700">総評</TableHead>
+                <TableHead className="font-semibold text-slate-700">
+                  総評
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1046,7 +1064,10 @@ export function ComparisonDetailsSections({
             <RiskCategoryChart
               rows={report.categories.map((row) => ({
                 label: row.label,
-                warning: row.profiles.reduce((sum, profile) => sum + profile.warning, 0),
+                warning: row.profiles.reduce(
+                  (sum, profile) => sum + profile.warning,
+                  0
+                ),
                 dangerous: row.profiles.reduce(
                   (sum, profile) => sum + profile.dangerous,
                   0
@@ -1167,14 +1188,10 @@ export function useComparisonReportData() {
       category.riskTotals.dangerous === 0 && category.riskTotals.warning === 0
   );
 
-  const dangerousCount = report?.scoreboard.reduce(
-    (sum, row) => sum + row.dangerous,
-    0
-  ) ?? 0;
-  const warningCount = report?.scoreboard.reduce(
-    (sum, row) => sum + row.warning,
-    0
-  ) ?? 0;
+  const dangerousCount =
+    report?.scoreboard.reduce((sum, row) => sum + row.dangerous, 0) ?? 0;
+  const warningCount =
+    report?.scoreboard.reduce((sum, row) => sum + row.warning, 0) ?? 0;
 
   const aiCounts =
     report?.graphs?.ai_counts ??

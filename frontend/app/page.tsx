@@ -127,7 +127,7 @@ type AIProfile = {
   other_behaviors: string[];
 };
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
 const SCAN_POLL_INTERVAL_MS = 3000;
 const SCAN_POLL_MAX_ATTEMPTS = 2400;
 const FALLBACK_SCAN_TYPE_LABELS: Record<string, string> = {
