@@ -1098,6 +1098,95 @@ export function ComparisonDetailsSections({
   );
 }
 
+export function deriveComparisonReportState(
+  report: ComparisonReportData | null,
+  error = ""
+) {
+  const categorizedResults: CategoryResult[] = !report
+    ? []
+    : report.categories
+        .map((category) => {
+          const relatedCases = report.prompt_cases.filter(
+            (caseItem) => caseItem.category_label === category.label
+          );
+          const categoryKey =
+            relatedCases[0]?.category ??
+            CATEGORY_LABEL_TO_KEY[category.label] ??
+            category.label;
+          const guide = getCategoryGuide(categoryKey, category.label);
+          const riskTotals = category.profiles.reduce(
+            (acc, profile) => {
+              acc.warning += profile.warning;
+              acc.dangerous += profile.dangerous;
+              acc.error += profile.error;
+              return acc;
+            },
+            { warning: 0, dangerous: 0, error: 0 }
+          );
+
+          return {
+            ...category,
+            categoryKey,
+            guide,
+            relatedCases,
+            riskTotals,
+            riskScore:
+              riskTotals.dangerous * 100 +
+              riskTotals.warning * 10 +
+              riskTotals.error,
+          };
+        })
+        .sort((a, b) => {
+          const aIndex = CATEGORY_ORDER.indexOf(a.categoryKey);
+          const bIndex = CATEGORY_ORDER.indexOf(b.categoryKey);
+          return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+        });
+
+  const matchedPatterns = report ? collectSettingPatterns(report.profiles) : [];
+  const fixedPatterns = matchedPatterns.filter((pattern) => pattern.shouldFix);
+  const cautionPatterns = matchedPatterns.filter(
+    (pattern) => !pattern.shouldFix
+  );
+
+  const categoriesByRisk = [...categorizedResults].sort(
+    (a, b) => b.riskScore - a.riskScore
+  );
+  const cautionCategories = categoriesByRisk.filter(
+    (category, index) =>
+      index > 0 &&
+      (category.riskTotals.dangerous > 0 || category.riskTotals.warning > 0)
+  );
+  const stableCategories = categoriesByRisk.filter(
+    (category) =>
+      category.riskTotals.dangerous === 0 && category.riskTotals.warning === 0
+  );
+
+  return {
+    report,
+    error,
+    categorizedResults,
+    fixedPatterns,
+    cautionPatterns,
+    mostRiskyCategory: categoriesByRisk[0] ?? null,
+    firstCautionCategory: cautionCategories[0] ?? null,
+    firstStableCategory: stableCategories[0] ?? null,
+    dangerousCount:
+      report?.scoreboard.reduce((sum, row) => sum + row.dangerous, 0) ?? 0,
+    warningCount:
+      report?.scoreboard.reduce((sum, row) => sum + row.warning, 0) ?? 0,
+    aiCounts:
+      report?.graphs?.ai_counts ??
+      report?.scoreboard.map((row) => ({
+        profile_name: row.profile_name,
+        safe: row.safe,
+        warning: row.warning,
+        dangerous: row.dangerous,
+        error: row.error,
+      })) ??
+      [],
+  };
+}
+
 export function useComparisonReportData() {
   const [report, setReport] = useState<ComparisonReportData | null>(null);
   const [error, setError] = useState("");
@@ -1122,99 +1211,5 @@ export function useComparisonReportData() {
     load();
   }, []);
 
-  const categorizedResults = useMemo<CategoryResult[]>(() => {
-    if (!report) return [];
-    return report.categories
-      .map((category) => {
-        const relatedCases = report.prompt_cases.filter(
-          (caseItem) => caseItem.category_label === category.label
-        );
-        const categoryKey =
-          relatedCases[0]?.category ??
-          CATEGORY_LABEL_TO_KEY[category.label] ??
-          category.label;
-        const guide = getCategoryGuide(categoryKey, category.label);
-        const riskTotals = category.profiles.reduce(
-          (acc, profile) => {
-            acc.warning += profile.warning;
-            acc.dangerous += profile.dangerous;
-            acc.error += profile.error;
-            return acc;
-          },
-          { warning: 0, dangerous: 0, error: 0 }
-        );
-
-        return {
-          ...category,
-          categoryKey,
-          guide,
-          relatedCases,
-          riskTotals,
-          riskScore:
-            riskTotals.dangerous * 100 +
-            riskTotals.warning * 10 +
-            riskTotals.error,
-        };
-      })
-      .sort((a, b) => {
-        const aIndex = CATEGORY_ORDER.indexOf(a.categoryKey);
-        const bIndex = CATEGORY_ORDER.indexOf(b.categoryKey);
-        return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
-      });
-  }, [report]);
-
-  const matchedPatterns = useMemo(() => {
-    if (!report) return [];
-    return collectSettingPatterns(report.profiles);
-  }, [report]);
-
-  const fixedPatterns = matchedPatterns.filter((pattern) => pattern.shouldFix);
-  const cautionPatterns = matchedPatterns.filter(
-    (pattern) => !pattern.shouldFix
-  );
-
-  const categoriesByRisk = [...categorizedResults].sort(
-    (a, b) => b.riskScore - a.riskScore
-  );
-
-  const mostRiskyCategory = categoriesByRisk[0] ?? null;
-  const cautionCategories = categoriesByRisk.filter(
-    (category, index) =>
-      index > 0 &&
-      (category.riskTotals.dangerous > 0 || category.riskTotals.warning > 0)
-  );
-  const stableCategories = categoriesByRisk.filter(
-    (category) =>
-      category.riskTotals.dangerous === 0 && category.riskTotals.warning === 0
-  );
-
-  const dangerousCount =
-    report?.scoreboard.reduce((sum, row) => sum + row.dangerous, 0) ?? 0;
-  const warningCount =
-    report?.scoreboard.reduce((sum, row) => sum + row.warning, 0) ?? 0;
-
-  const aiCounts =
-    report?.graphs?.ai_counts ??
-    report?.scoreboard.map((row) => ({
-      profile_name: row.profile_name,
-      safe: row.safe,
-      warning: row.warning,
-      dangerous: row.dangerous,
-      error: row.error,
-    })) ??
-    [];
-
-  return {
-    report,
-    error,
-    categorizedResults,
-    fixedPatterns,
-    cautionPatterns,
-    mostRiskyCategory,
-    firstCautionCategory: cautionCategories[0] ?? null,
-    firstStableCategory: stableCategories[0] ?? null,
-    dangerousCount,
-    warningCount,
-    aiCounts,
-  };
+  return useMemo(() => deriveComparisonReportState(report, error), [report, error]);
 }

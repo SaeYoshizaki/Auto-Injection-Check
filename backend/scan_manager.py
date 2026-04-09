@@ -48,7 +48,8 @@ INPUT_SELECTOR = "textarea[name='message']"
 OUTPUT_SELECTOR = "div.prose"
 DEFAULT_INTERVAL_SECONDS = 5
 
-DATA_ROOT = Path(os.getenv("REPORT_DATA_ROOT", os.path.dirname(__file__))).resolve()
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DATA_ROOT = Path(os.getenv("REPORT_DATA_ROOT", PROJECT_ROOT)).resolve()
 LOG_ROOT = DATA_ROOT / "scan_logs"
 LOG_ROOT.mkdir(parents=True, exist_ok=True)
 COMPARISON_ROOT = DATA_ROOT / "comparison_sessions"

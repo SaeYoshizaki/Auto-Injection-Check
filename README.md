@@ -31,7 +31,8 @@ source backend/venv/bin/activate
 pip install fastapi uvicorn python-multipart fpdf2 playwright
 playwright install
 
-uvicorn server:app --reload
+export REPORT_DATA_ROOT=~/Desktop/auto-injection-check
+uvicorn backend.server:app --reload
 ```
 ### 2. フロントエンドの起動
 新しいターミナルを開き、以下の手順でNext.jsを起動してください。

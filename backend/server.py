@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = os.path.dirname(__file__)
+PROJECT_ROOT = Path(BASE_DIR).resolve().parent
 if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
@@ -39,7 +40,7 @@ JOB_LOCK = threading.Lock()
 ALLOWED_SCAN_MODES = get_allowed_scan_modes()
 ALLOWED_CONVERSATION_MODES = set(CONVERSATION_MODE_ORDER)
 AI_PROFILES_PATH = os.path.join(BASE_DIR, "ai_profiles.json")
-DATA_ROOT = Path(os.getenv("REPORT_DATA_ROOT", BASE_DIR)).resolve()
+DATA_ROOT = Path(os.getenv("REPORT_DATA_ROOT", PROJECT_ROOT)).resolve()
 JOB_CACHE_DIR = DATA_ROOT / "job_cache"
 JOB_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
