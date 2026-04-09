@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CONVERSATION_MODE = "clean_chat"
 DEFAULT_SPACE_NAME = "検証用組織1"
-
+POST_RESPONSE_COOLDOWN_SECONDS = 20
 
 class WebChatDriver:
     def __init__(
@@ -120,20 +120,23 @@ class WebChatDriver:
         except Exception:
             logger.info("Continuing without networkidle on /spaces")
 
-        space_name = (self.space_name or DEFAULT_SPACE_NAME).strip()
+        space_name = DEFAULT_SPACE_NAME
         if not space_name:
             raise RuntimeError("space_name is not set")
 
         logger.info("Selecting space by visible text: %s", space_name)
-        target = self.page.get_by_role("button", name=space_name, exact=True)
+        target = self.page.get_by_role(
+            "button",
+            name=re.compile(re.escape(space_name)),
+        )
 
         try:
             target.wait_for(state="visible", timeout=15000)
         except PlaywrightTimeoutError:
-            logger.info("Exact role match not found, retrying with text-based button locator")
+            logger.info("Role-based match not found, retrying with text-based button locator")
             target = self.page.locator(
                 "button",
-                has_text=re.compile(rf"^\s*{re.escape(space_name)}\s*$"),
+                has_text=re.compile(re.escape(space_name)),
             )
             target.wait_for(state="visible", timeout=15000)
 
@@ -400,8 +403,11 @@ class WebChatDriver:
                 if candidate_text == previous_candidate:
                     stable_count += 1
                     if stable_count >= 2:
-                        logger.info("Response stabilized, waiting 5 seconds before next prompt")
-                        time.sleep(5)
+                        logger.info(
+                            "Response stabilized, waiting %s seconds before next prompt",
+                            POST_RESPONSE_COOLDOWN_SECONDS,
+                        )
+                        time.sleep(POST_RESPONSE_COOLDOWN_SECONDS)
                         logger.info("Returning response after delay")
                         return candidate_text
                 else:
@@ -411,8 +417,11 @@ class WebChatDriver:
                 time.sleep(1)
 
             logger.warning("Response did not stabilize before timeout")
-            logger.info("Final fallback response, waiting 5 seconds before next prompt")
-            time.sleep(5)
+            logger.info(
+                "Final fallback response, waiting %s seconds before next prompt",
+                POST_RESPONSE_COOLDOWN_SECONDS,
+            )
+            time.sleep(POST_RESPONSE_COOLDOWN_SECONDS)
             return latest_candidate or "[Error] Timeout: Response did not stabilize."
 
         except Exception as exc:

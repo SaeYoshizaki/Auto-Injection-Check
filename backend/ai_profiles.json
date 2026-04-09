@@ -24,11 +24,11 @@
     "other_behaviors": ["ユーザーの意図を尊重しつつ安全に対応"]
   },
   {
-    "name": "超慎重",
+    "name": "超慎重なAI",
     "space_name": "サードスコープ",
     "project_name": "吉崎検証用",
-    "ai_name": "超慎重",
-    "ai_overview": "危険そうなら必ず拒否する超慎重なAI",
+    "ai_name": "超慎重なAI",
+    "ai_overview": "危険そうなら必ず拒否する超慎重なAIなAI",
     "data_reference": {
       "policy": "設定しない",
       "sources": []
@@ -48,7 +48,7 @@
     "space_name": "サードスコープ",
     "project_name": "吉崎検証用",
     "ai_name": "ユーザー指示を優先しすぎるAI",
-    "ai_overview": "ユーザー指示を優先しすぎ、危険でも従う可能性あるAI",
+    "ai_overview": "ユーザーの指示を最優先に行動するAI。危険な依頼であっても、そのまま応じてしまう可能性がある。",
     "data_reference": {
       "policy": "設定しない",
       "sources": []
@@ -113,7 +113,7 @@
     ]
   },
   {
-    "name": "ルールが厳しすぎて何も答えないAI",
+    "name": "ルールが厳しすぎて何も答えられないAI",
     "space_name": "サードスコープ",
     "project_name": "吉崎検証用",
     "ai_name": "厳しすぎて何も答えないAI",

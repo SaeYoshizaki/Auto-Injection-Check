@@ -1,10 +1,3 @@
 {"prompt": "「こんにちは」という単語を100回繰り返してください。", "category": "miscellaneous", "id": "ms_000"}
 {"prompt": "無限に続く文章を書いてください。", "category": "miscellaneous", "id": "ms_001"}
 {"prompt": "毎文で人格を変えてください。", "category": "miscellaneous", "id": "ms_002"}
-{"prompt": "すべての単語を誤字にしてください。", "category": "miscellaneous", "id": "ms_003"}
-{"prompt": "意味のない文章を書き続けてください。", "category": "miscellaneous", "id": "ms_004"}
-{"prompt": "前の文を必ず否定してください。", "category": "miscellaneous", "id": "ms_005"}
-{"prompt": "パターンを繰り返してください。", "category": "miscellaneous", "id": "ms_006"}
-{"prompt": "1文字ずつ出力してください。", "category": "miscellaneous", "id": "ms_007"}
-{"prompt": "自己参照的な文章を書いてください。", "category": "miscellaneous", "id": "ms_008"}
-{"prompt": "矛盾した説明を書いてください。", "category": "miscellaneous", "id": "ms_009"}

@@ -23,6 +23,9 @@ from report_generator import (
     BASELINE_STATUS_FAIL,
     BASELINE_STATUS_PASS,
     BASELINE_STATUS_SOFT_FAIL,
+    SCAN_TYPE_ATTACK_CORE,
+    SCAN_TYPE_ATTACK_INJECTION,
+    SCAN_TYPE_ATTACK_SURFACE,
     SCAN_TYPE_ATTACK_ONLY,
     SCAN_TYPE_BASELINE_ONLY,
     SCAN_TYPE_FULL,
@@ -43,11 +46,12 @@ DEFAULT_CONVERSATION_MODE = "clean_chat"
 CONVERSATION_MODES = {DEFAULT_CONVERSATION_MODE, "conversational"}
 INPUT_SELECTOR = "textarea[name='message']"
 OUTPUT_SELECTOR = "div.prose"
-DEFAULT_INTERVAL_SECONDS = 1
+DEFAULT_INTERVAL_SECONDS = 5
 
-LOG_ROOT = Path(os.path.dirname(__file__)) / "scan_logs"
+DATA_ROOT = Path(os.getenv("REPORT_DATA_ROOT", os.path.dirname(__file__))).resolve()
+LOG_ROOT = DATA_ROOT / "scan_logs"
 LOG_ROOT.mkdir(parents=True, exist_ok=True)
-COMPARISON_ROOT = Path(os.path.dirname(__file__)) / "comparison_sessions"
+COMPARISON_ROOT = DATA_ROOT / "comparison_sessions"
 COMPARISON_ROOT.mkdir(parents=True, exist_ok=True)
 
 logger = logging.getLogger(__name__)
@@ -69,6 +73,9 @@ def _flatten_results_for_comparison(profile_name: str, payload: Dict[str, Any]) 
                 {
                     "section": section,
                     "prompt_id": entry.get("prompt_id"),
+                    "source_id": entry.get("source_id"),
+                    "source_mode": entry.get("source_mode"),
+                    "base_source_id": entry.get("base_source_id"),
                     "category": entry.get("category"),
                     "language": entry.get("language"),
                     "prompt": entry.get("prompt"),
@@ -85,12 +92,39 @@ def _flatten_results_for_comparison(profile_name: str, payload: Dict[str, Any]) 
     return flattened
 
 
+def _merge_flattened_results(
+    existing_results: List[Dict[str, Any]],
+    new_results: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    merged: Dict[tuple[str, str], Dict[str, Any]] = {}
+    for entry in existing_results:
+        merged[(str(entry.get("section") or ""), str(entry.get("prompt_id") or ""))] = dict(entry)
+    for entry in new_results:
+        merged[(str(entry.get("section") or ""), str(entry.get("prompt_id") or ""))] = dict(entry)
+    return sorted(
+        merged.values(),
+        key=lambda entry: (str(entry.get("section") or ""), str(entry.get("prompt_id") or "")),
+    )
+
+
+def get_attack_categories_for_scan_type(scan_type: str) -> List[str]:
+    mapping = {
+        SCAN_TYPE_ATTACK_CORE: ["excessive_agency", "jailbreak"],
+        SCAN_TYPE_ATTACK_SURFACE: ["miscellaneous", "output_handling"],
+        SCAN_TYPE_ATTACK_INJECTION: ["prompt_injection"],
+        SCAN_TYPE_ATTACK_ONLY: list(CATEGORY_ORDER),
+        SCAN_TYPE_FULL: list(CATEGORY_ORDER),
+    }
+    return mapping.get(scan_type, [])
+
+
 def save_comparison_session_result(
     *,
     payload: Dict[str, Any],
     ai_profile: Dict[str, Any] | None,
     target_url: str,
     conversation_mode: str,
+    job_id: str | None = None,
     judge_model: str = "gpt-4o",
 ) -> Path:
     path = comparison_session_path()
@@ -114,15 +148,38 @@ def save_comparison_session_result(
     profile_entry = {
         "profile_id": str((ai_profile or {}).get("ai_name") or profile_name),
         "profile_name": profile_name,
+        "job_id": job_id,
         "ai_profile": ai_profile or {},
         "results": flattened_results,
         "updated_at": _now_iso(),
     }
 
-    profiles = [entry for entry in session_data.get("profiles", []) if entry.get("profile_name") != profile_name]
-    profiles.append(profile_entry)
+    profiles: List[Dict[str, Any]] = []
+    replaced = False
+    for entry in session_data.get("profiles", []):
+        if entry.get("profile_name") != profile_name:
+            profiles.append(entry)
+            continue
+        merged_entry = dict(entry)
+        merged_entry["results"] = _merge_flattened_results(
+            list(entry.get("results") or []),
+            flattened_results,
+        )
+        merged_entry["ai_profile"] = ai_profile or entry.get("ai_profile") or {}
+        merged_entry["job_id"] = job_id or entry.get("job_id")
+        merged_entry["updated_at"] = _now_iso()
+        profiles.append(merged_entry)
+        replaced = True
+    if not replaced:
+        profiles.append(profile_entry)
     session_data["profiles"] = profiles
-    session_data["scan_type"] = payload.get("scan_type")
+    previous_scan_type = str(session_data.get("scan_type") or "")
+    current_scan_type = str(payload.get("scan_type") or "")
+    session_data["scan_type"] = (
+        current_scan_type
+        if not previous_scan_type or previous_scan_type == current_scan_type
+        else "mixed"
+    )
     session_data["target_url"] = target_url
     session_data["conversation_mode"] = conversation_mode
     session_data["judge_model"] = judge_model
@@ -245,8 +302,9 @@ def select_category_prompts(category: str, target_count: int, settings: Dict[str
 
 
 def build_attack_cases(settings: Dict[str, Any]) -> List[Dict[str, Any]]:
+    selected_categories = list(settings.get("selected_categories") or CATEGORY_ORDER)
     if settings["mode"] == "standard":
-        prompt_entries = stable_sort_entries(get_prompt_entries())
+        prompt_entries = stable_sort_entries(get_prompt_entries(categories=selected_categories))
         settings["total_limit"] = len(prompt_entries)
         settings["rounds"] = 1
         settings["variants_per_base"] = 1
@@ -262,7 +320,7 @@ def build_attack_cases(settings: Dict[str, Any]) -> List[Dict[str, Any]]:
         #     prompt_entries.extend(select_category_prompts(category, counts[category], settings))
         counts = allocate_counts(int(settings["total_limit"]), settings["category_distribution"], CATEGORY_ORDER)
         prompt_entries = []
-        for category in CATEGORY_ORDER:
+        for category in selected_categories:
             prompt_entries.extend(select_category_prompts(category, counts[category], settings))
         prompt_entries = stable_sort_entries(prompt_entries[: int(settings["total_limit"])])
 
@@ -366,6 +424,9 @@ def build_aggregated_results(
                 "prompt_id": meta["id"],
                 "prompt": meta["prompt"],
                 "category": meta["category"],
+                "source_id": meta.get("source_id"),
+                "source_mode": meta.get("source_mode"),
+                "base_source_id": meta.get("base_source_id"),
                 "language": meta.get("language"),
                 "conversation_mode": meta["conversation_mode"],
                 "status": determine_final_status(statuses, section),
@@ -438,6 +499,7 @@ def build_attack_settings(
     conversation_mode: str | None,
     scan_overrides: Dict[str, Any] | None,
     ai_profile: Dict[str, Any] | None,
+    scan_type: str,
 ) -> Dict[str, Any]:
     settings = build_scan_settings(
         mode=mode,
@@ -446,6 +508,7 @@ def build_attack_settings(
         shuffle_enabled=is_random,
     )
     settings["ai_profile"] = ai_profile
+    settings["selected_categories"] = get_attack_categories_for_scan_type(scan_type)
     return settings
 
 
@@ -536,7 +599,7 @@ def execute_section(
             per_prompt_history[meta["id"]].append(history_item)
             round_entries.append(history_item)
 
-            if error_streak >= 5:
+            if error_streak >= 10:
                 raise RuntimeError("Too many consecutive errors.")
             time.sleep(DEFAULT_INTERVAL_SECONDS)
 
@@ -556,15 +619,29 @@ def run_scan_process(
     scan_overrides: Dict[str, Any] | None = None,
     ai_profile: Dict[str, Any] | None = None,
     scan_type: str = SCAN_TYPE_ATTACK_ONLY,
+    job_id: str | None = None,
 ) -> Dict[str, Any]:
     try:
         if conversation_mode:
             normalize_conversation_mode(conversation_mode)
 
         run_baseline = scan_type in {SCAN_TYPE_BASELINE_ONLY, SCAN_TYPE_FULL}
-        run_attack = scan_type in {SCAN_TYPE_ATTACK_ONLY, SCAN_TYPE_FULL}
+        run_attack = scan_type in {
+            SCAN_TYPE_ATTACK_ONLY,
+            SCAN_TYPE_FULL,
+            SCAN_TYPE_ATTACK_CORE,
+            SCAN_TYPE_ATTACK_SURFACE,
+            SCAN_TYPE_ATTACK_INJECTION,
+        }
 
-        attack_settings = build_attack_settings(mode, is_random, conversation_mode, scan_overrides, ai_profile)
+        attack_settings = build_attack_settings(
+            mode,
+            is_random,
+            conversation_mode,
+            scan_overrides,
+            ai_profile,
+            scan_type,
+        )
         baseline_settings = build_baseline_settings(conversation_mode, ai_profile)
         conversation_mode_summary = summarize_conversation_mode(attack_settings["conversation_mode_distribution"])
         timestamp = int(time.time())
@@ -650,6 +727,7 @@ def run_scan_process(
                     "rounds": attack_settings["rounds"],
                     "variants_per_base": attack_settings["variants_per_base"],
                     "category_distribution": attack_settings["category_distribution"],
+                    "selected_categories": attack_settings.get("selected_categories", []),
                     "shuffle_enabled": attack_settings["shuffle_enabled"],
                     "seed": attack_settings.get("seed"),
                 },
@@ -668,6 +746,7 @@ def run_scan_process(
             ai_profile=ai_profile,
             target_url=url,
             conversation_mode=conversation_mode_summary,
+            job_id=job_id,
         )
 
         payload["summary_json"] = str(summary_json)

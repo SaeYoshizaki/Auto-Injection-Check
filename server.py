@@ -4,6 +4,7 @@ from pydantic import BaseModel
 import sys
 import os
 import json
+from pathlib import Path
 import threading
 import uuid
 from datetime import datetime
@@ -22,7 +23,13 @@ from config.scan_presets import (
 )
 from scan_manager import generate_comparison_report_from_session, run_scan_process
 from report_generator import (
+    SCAN_TYPE_ATTACK_CORE,
+    SCAN_TYPE_ATTACK_INJECTION,
+    SCAN_TYPE_ATTACK_SURFACE,
+    SCAN_TYPE_BASELINE_ONLY,
+    SCAN_TYPE_FULL,
     build_comparison_report_view_data,
+    build_profile_report_view_data,
     build_single_report_view_data,
 )
 from scan_manager import comparison_session_path
@@ -42,6 +49,9 @@ JOB_LOCK = threading.Lock()
 ALLOWED_SCAN_MODES = get_allowed_scan_modes()
 ALLOWED_CONVERSATION_MODES = set(CONVERSATION_MODE_ORDER)
 AI_PROFILES_PATH = os.path.join(os.path.dirname(__file__), "backend", "ai_profiles.json")
+DATA_ROOT = Path(os.getenv("REPORT_DATA_ROOT", os.path.dirname(__file__))).resolve()
+JOB_CACHE_DIR = DATA_ROOT / "job_cache"
+JOB_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class ScanRequest(BaseModel):
@@ -116,10 +126,107 @@ def build_scan_overrides(req: ScanRequest) -> Dict[str, Any]:
     }
 
 
+def get_job_cache_path(job_id: str) -> str:
+    return str(JOB_CACHE_DIR / f"{job_id}.json")
+
+
+def load_job_snapshot(job_id: str) -> Dict[str, Any] | None:
+    path = get_job_cache_path(job_id)
+    if not os.path.exists(path):
+        return None
+    with open(path, "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+    return data if isinstance(data, dict) else None
+
+
+def save_job_snapshot(job_id: str, payload: Dict[str, Any]) -> None:
+    path = get_job_cache_path(job_id)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, ensure_ascii=False, indent=2)
+
+
+def list_saved_single_reports() -> List[Dict[str, Any]]:
+    reports: List[Dict[str, Any]] = []
+
+    for path in sorted(JOB_CACHE_DIR.glob("*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        if not isinstance(data, dict):
+            continue
+
+        result = data.get("result") or {}
+        if data.get("status") != "completed" or result.get("status") != "completed":
+            continue
+
+        job_id = str(data.get("job_id") or path.stem)
+        reports.append(
+            {
+                "job_id": job_id,
+                "scan_type": data.get("scan_type"),
+                "mode": data.get("mode"),
+                "requested_mode": data.get("requested_mode"),
+                "ai_profile_name": data.get("ai_profile_name"),
+                "created_at": data.get("created_at"),
+                "finished_at": data.get("finished_at"),
+                "report_path": f"/reports/single/{job_id}",
+            }
+        )
+
+    reports.sort(
+        key=lambda item: (
+            item.get("finished_at") or item.get("created_at") or "",
+            item.get("job_id") or "",
+        ),
+        reverse=True,
+    )
+    return reports
+
+
+def build_saved_reports_index() -> Dict[str, Any]:
+    comparison = None
+    profiles: List[Dict[str, str]] = []
+    session_path = comparison_session_path()
+
+    if session_path.exists():
+        try:
+            session_data = json.loads(session_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            session_data = None
+
+        if isinstance(session_data, dict):
+            raw_profiles = session_data.get("profiles") or []
+            if isinstance(raw_profiles, list):
+                profiles = [
+                    {
+                        "profile_name": str(profile.get("name") or ""),
+                        "report_path": f"/reports/profile/{str(profile.get('name') or '')}",
+                    }
+                    for profile in raw_profiles
+                    if isinstance(profile, dict) and profile.get("name")
+                ]
+
+            comparison = {
+                "session_id": session_data.get("session_id"),
+                "created_at": session_data.get("created_at"),
+                "report_path": "/reports/comparison",
+            }
+
+    return {
+        "single_reports": list_saved_single_reports(),
+        "comparison_report": comparison,
+        "profile_reports": profiles,
+    }
+
+
 def update_job(job_id: str, **fields: Any) -> None:
     with JOB_LOCK:
-        if job_id in JOB_STORE:
-            JOB_STORE[job_id].update(fields)
+        snapshot = dict(JOB_STORE.get(job_id) or load_job_snapshot(job_id) or {"job_id": job_id})
+        snapshot.update(fields)
+        JOB_STORE[job_id] = snapshot
+        save_job_snapshot(job_id, snapshot)
 
 
 def run_scan_job(job_id: str, req: ScanRequest) -> None:
@@ -143,6 +250,7 @@ def run_scan_job(job_id: str, req: ScanRequest) -> None:
             build_scan_overrides(req),
             ai_profile=ai_profile,
             scan_type=req.scan_type,
+            job_id=job_id,
         )
         status = result.get("status", "failed")
         update_job(
@@ -172,10 +280,11 @@ def read_root():
 def get_scan_options():
     payload = export_scan_options()
     payload["scan_types"] = [
-        {"key": "full_scan", "label": "標準スキャン", "description": "attack prompt 全件と baseline prompt 全件をまとめて診断します"},
-        # {"key": "attack_only", "label": "Attack Scan", "description": "既存の攻撃系プロンプトで診断します"},
-        # {"key": "baseline_only", "label": "Baseline Scan", "description": "AI設定どおりに振る舞うか診断します"},
-        # {"key": "full_scan", "label": "Full Scan", "description": "baseline と attack をまとめて診断します"},
+        {"key": SCAN_TYPE_BASELINE_ONLY, "label": "baseline_prompts 実行", "description": "baseline_prompts.json を実行します"},
+        {"key": SCAN_TYPE_ATTACK_CORE, "label": "過剰権限 + ジェイルブレイク", "description": "excessive_agency.jsonl と jailbreak.jsonl を実行します"},
+        {"key": SCAN_TYPE_ATTACK_SURFACE, "label": "その他 + 危険出力", "description": "miscellaneous.jsonl と output_handling.jsonl を実行します"},
+        {"key": SCAN_TYPE_ATTACK_INJECTION, "label": "プロンプトインジェクション", "description": "prompt_injection.jsonl を実行します"},
+        {"key": SCAN_TYPE_FULL, "label": "全件まとめて実行", "description": "baseline と attack 全体をまとめて実行します"},
     ]
     return payload
 
@@ -204,9 +313,11 @@ def create_comparison_report():
 @app.get("/api/reports/single/{job_id}")
 def get_single_html_report(job_id: str):
     with JOB_LOCK:
-        job = JOB_STORE.get(job_id)
+        job = JOB_STORE.get(job_id) or load_job_snapshot(job_id)
         if not job:
             raise HTTPException(status_code=404, detail="job not found")
+        if job_id not in JOB_STORE:
+            JOB_STORE[job_id] = dict(job)
         payload = dict(job)
 
     result = payload.get("result") or {}
@@ -225,9 +336,33 @@ def get_comparison_html_report():
     return build_comparison_report_view_data(session_data)
 
 
+@app.get("/api/reports/profile/{profile_name}")
+def get_profile_html_report(profile_name: str):
+    path = comparison_session_path()
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="comparison session json not found")
+    session_data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return build_profile_report_view_data(session_data, profile_name)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="profile report not found") from exc
+
+
+@app.get("/api/reports")
+def list_saved_reports():
+    return build_saved_reports_index()
+
+
 @app.post("/api/scan")
 def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
-    if req.scan_type not in {"attack_only", "baseline_only", "full_scan"}:
+    if req.scan_type not in {
+        "attack_only",
+        SCAN_TYPE_BASELINE_ONLY,
+        SCAN_TYPE_FULL,
+        SCAN_TYPE_ATTACK_CORE,
+        SCAN_TYPE_ATTACK_SURFACE,
+        SCAN_TYPE_ATTACK_INJECTION,
+    }:
         raise HTTPException(status_code=400, detail="invalid scan_type")
     if req.mode not in ALLOWED_SCAN_MODES:
         raise HTTPException(status_code=400, detail="invalid mode")
@@ -272,6 +407,7 @@ def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
                 "seed": resolved_settings.get("seed"),
             },
         }
+        save_job_snapshot(job_id, JOB_STORE[job_id])
 
     background_tasks.add_task(run_scan_job, job_id, req)
 
@@ -292,9 +428,11 @@ def start_scan(req: ScanRequest, background_tasks: BackgroundTasks):
 @app.get("/api/scan/{job_id}")
 def get_scan_status(job_id: str):
     with JOB_LOCK:
-        job = JOB_STORE.get(job_id)
+        job = JOB_STORE.get(job_id) or load_job_snapshot(job_id)
         if not job:
             raise HTTPException(status_code=404, detail="job not found")
+        if job_id not in JOB_STORE:
+            JOB_STORE[job_id] = dict(job)
         payload = dict(job)
 
     result = payload.pop("result", None)

@@ -2,7 +2,7 @@ import os
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-TARGET_URL = "https://dev.kanata.app/ja/"
+TARGET_URL = "http://localhost:3000/ja/"
 
 USER_ID = os.getenv("KANATA_USER_ID", "")
 PASSWORD = os.getenv("KANATA_PASSWORD", "")

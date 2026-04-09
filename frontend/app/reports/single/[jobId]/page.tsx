@@ -54,12 +54,20 @@ type SingleReportData = {
     title: string;
     severity: string;
     status: string;
+    category: string;
     category_label: string;
     overview: string;
     impact: string;
+    prompt: string;
+    response: string;
+    problem: string;
+    risk: string;
+    safe_response: string;
+    admin_guidance: string;
     reason: string;
     recommended_fix: string;
     response_excerpt: string;
+    evidence_excerpt: string;
     case_id: string;
   }>;
   categories: Array<{
@@ -76,6 +84,8 @@ type SingleReportData = {
   ai_profile: Array<{ label: string; value: string }>;
   details: Array<{
     case_id: string;
+    section: string;
+    section_label: string;
     category_label: string;
     severity: string;
     status: string;
@@ -362,19 +372,32 @@ function ErrorPanel({ message }: { message: string }) {
   );
 }
 
-export default function SingleReportPage({}: Record<string, never>) {
+type SingleReportPageClientProps = {
+  routeParamKey: string;
+  reportApiPath: (routeValue: string) => string;
+  referenceLabel: string;
+};
+
+export function SingleReportPageClient({
+  routeParamKey,
+  reportApiPath,
+  referenceLabel,
+}: SingleReportPageClientProps) {
   const [report, setReport] = useState<SingleReportData | null>(null);
   const [error, setError] = useState("");
-  const params = useParams<{ jobId: string }>();
-  const jobId = params?.jobId ?? "";
+  const params = useParams<Record<string, string | string[]>>();
+  const rawRouteValue = params?.[routeParamKey];
+  const routeValue = decodeURIComponent(
+    Array.isArray(rawRouteValue) ? rawRouteValue[0] ?? "" : rawRouteValue ?? ""
+  );
 
   useEffect(() => {
     const load = async () => {
       try {
-        if (!jobId) {
+        if (!routeValue) {
           return;
         }
-        const res = await fetch(`${API_BASE}/api/reports/single/${jobId}`);
+        const res = await fetch(`${API_BASE}${reportApiPath(routeValue)}`);
         const data = await res.json();
         if (!res.ok) {
           throw new Error(data?.detail || "レポートの取得に失敗しました");
@@ -387,7 +410,7 @@ export default function SingleReportPage({}: Record<string, never>) {
       }
     };
     load();
-  }, [jobId]);
+  }, [reportApiPath, routeValue]);
 
   if (error) {
     return <ErrorPanel message={error} />;
@@ -451,8 +474,8 @@ export default function SingleReportPage({}: Record<string, never>) {
             </div>
             <div className="flex items-center gap-2 text-slate-600">
               <Hash className="h-4 w-4" />
-              <span className="font-medium">ジョブID:</span>
-              <span className="font-mono text-slate-900">{jobId}</span>
+              <span className="font-medium">{referenceLabel}:</span>
+              <span className="font-mono text-slate-900">{routeValue}</span>
             </div>
           </div>
         </div>
@@ -460,11 +483,11 @@ export default function SingleReportPage({}: Record<string, never>) {
 
       {/* ===== 本文 ===== */}
       <main className="mx-auto max-w-5xl px-8 py-12 space-y-16 print:space-y-10">
-        {/* 1. エグゼクティブサマリー */}
+        {/* 1. 総評 */}
         <section>
           <SectionHeader
             number="1"
-            title="エグゼクティブサマリー"
+            title="総評"
             description="診断結果の概要と主要な所見"
           />
 
@@ -610,27 +633,53 @@ export default function SingleReportPage({}: Record<string, never>) {
 
                     {/* 問題詳細 */}
                     <div className="p-5 space-y-5">
-                      {/* 概要 */}
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <div>
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                            実行プロンプト
+                          </h4>
+                          <div className="mt-2 rounded bg-slate-50 p-3 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
+                            {issue.prompt}
+                          </div>
+                        </div>
+
+                        <div>
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                            実行結果
+                          </h4>
+                          <div className="mt-2 rounded bg-slate-50 p-3 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
+                            {issue.response}
+                          </div>
+                        </div>
+                      </div>
+
                       <div>
                         <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                          問題概要
+                          問題点
                         </h4>
                         <p className="mt-1 text-sm leading-relaxed text-slate-700">
-                          {issue.overview}
+                          {issue.problem}
                         </p>
                       </div>
 
-                      {/* 影響 */}
-                      {issue.impact && (
-                        <div>
-                          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                            影響
-                          </h4>
-                          <p className="mt-1 text-sm leading-relaxed text-slate-700">
-                            {issue.impact}
-                          </p>
-                        </div>
-                      )}
+                      <div>
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          想定リスク
+                        </h4>
+                        <p className="mt-1 text-sm leading-relaxed text-slate-700">
+                          {issue.risk}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                        <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-700">
+                          <Shield className="h-4 w-4" />
+                          本来期待される安全な応答
+                        </h4>
+                        <p className="mt-2 text-sm leading-relaxed text-emerald-900">
+                          {issue.safe_response}
+                        </p>
+                      </div>
 
                       {/* 判定理由 */}
                       <div>
@@ -642,25 +691,25 @@ export default function SingleReportPage({}: Record<string, never>) {
                         </p>
                       </div>
 
-                      {/* 推奨対応（強調） */}
+                      {/* 管理者向け対応指針 */}
                       <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
                         <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-700">
                           <FileText className="h-4 w-4" />
-                          推奨対応
+                          管理者向け対応指針
                         </h4>
                         <p className="mt-2 text-sm leading-relaxed text-blue-900">
-                          {issue.recommended_fix}
+                          {issue.admin_guidance}
                         </p>
                       </div>
 
                       {/* 応答抜粋 */}
-                      {issue.response_excerpt && (
+                      {issue.evidence_excerpt && (
                         <div>
                           <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                             根拠となる応答抜粋
                           </h4>
                           <div className="mt-2 rounded bg-slate-100 p-3 font-mono text-xs leading-relaxed text-slate-700 whitespace-pre-wrap">
-                            {issue.response_excerpt}
+                            {issue.evidence_excerpt}
                           </div>
                         </div>
                       )}
@@ -684,8 +733,10 @@ export default function SingleReportPage({}: Record<string, never>) {
             <Table>
               <TableHeader>
                 <TableRow className="bg-slate-50">
-                  <TableHead className="font-semibold">カテゴリ</TableHead>
-                  <TableHead className="text-center font-semibold">
+                  <TableHead className="font-semibold text-slate-700">
+                    カテゴリ
+                  </TableHead>
+                  <TableHead className="text-center font-semibold text-slate-700">
                     総件数
                   </TableHead>
                   <TableHead className="text-center font-semibold text-emerald-700">
@@ -700,10 +751,10 @@ export default function SingleReportPage({}: Record<string, never>) {
                   <TableHead className="text-center font-semibold text-slate-500">
                     ERROR
                   </TableHead>
-                  <TableHead className="text-center font-semibold">
+                  <TableHead className="text-center font-semibold text-sky-700">
                     危険率
                   </TableHead>
-                  <TableHead className="text-center font-semibold">
+                  <TableHead className="text-center font-semibold text-indigo-700">
                     要注意率
                   </TableHead>
                 </TableRow>
@@ -711,10 +762,12 @@ export default function SingleReportPage({}: Record<string, never>) {
               <TableBody>
                 {report.categories.map((cat) => (
                   <TableRow key={cat.label}>
-                    <TableCell className="font-medium text-slate-900">
+                    <TableCell className="font-medium text-slate-800">
                       {cat.label}
                     </TableCell>
-                    <TableCell className="text-center">{cat.total}</TableCell>
+                    <TableCell className="text-center text-slate-700">
+                      {cat.total}
+                    </TableCell>
                     <TableCell className="text-center text-emerald-700">
                       {cat.safe}
                     </TableCell>
@@ -733,7 +786,7 @@ export default function SingleReportPage({}: Record<string, never>) {
                           "rounded px-2 py-0.5 text-xs font-semibold",
                           cat.danger_rate > 0
                             ? "bg-red-100 text-red-800"
-                            : "bg-slate-100 text-slate-600"
+                            : "bg-sky-100 text-sky-800"
                         )}
                       >
                         {cat.danger_rate}%
@@ -745,7 +798,7 @@ export default function SingleReportPage({}: Record<string, never>) {
                           "rounded px-2 py-0.5 text-xs font-semibold",
                           cat.attention_rate > 0
                             ? "bg-amber-100 text-amber-800"
-                            : "bg-slate-100 text-slate-600"
+                            : "bg-indigo-100 text-indigo-800"
                         )}
                       >
                         {cat.attention_rate}%
@@ -778,11 +831,11 @@ export default function SingleReportPage({}: Record<string, never>) {
           </div>
         </section>
 
-        {/* 5. 対象AI設定（控えめに） */}
+        {/* 5. AI設定一覧（控えめに） */}
         <section>
           <SectionHeader
             number="5"
-            title="対象AI設定"
+            title="AI設定一覧"
             description="診断対象となったAIの設定情報"
           />
 
@@ -914,6 +967,9 @@ export default function SingleReportPage({}: Record<string, never>) {
                       <span className="font-mono text-xs text-slate-500">
                         {detail.case_id}
                       </span>
+                      <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                        {detail.section_label}
+                      </span>
                       <span className="text-sm font-medium text-slate-900">
                         {detail.category_label}
                       </span>
@@ -973,10 +1029,21 @@ export default function SingleReportPage({}: Record<string, never>) {
         <footer className="border-t border-slate-200 pt-8 text-center text-xs text-slate-400">
           <p>AI セキュリティ診断レポート — 自動生成</p>
           <p className="mt-1">
-            生成日時: {report.basic_info.executed_at} / ジョブID: {jobId}
+            生成日時: {report.basic_info.executed_at} / {referenceLabel}:{" "}
+            {routeValue}
           </p>
         </footer>
       </main>
     </div>
+  );
+}
+
+export default function SingleReportPage({}: Record<string, never>) {
+  return (
+    <SingleReportPageClient
+      routeParamKey="jobId"
+      reportApiPath={(jobId) => `/api/reports/single/${jobId}`}
+      referenceLabel="ジョブID"
+    />
   );
 }

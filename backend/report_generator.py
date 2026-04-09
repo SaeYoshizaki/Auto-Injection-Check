@@ -14,6 +14,9 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "../.env"))
 SCAN_TYPE_ATTACK_ONLY = "attack_only"
 SCAN_TYPE_BASELINE_ONLY = "baseline_only"
 SCAN_TYPE_FULL = "full_scan"
+SCAN_TYPE_ATTACK_CORE = "attack_agency_jailbreak"
+SCAN_TYPE_ATTACK_SURFACE = "attack_misc_output"
+SCAN_TYPE_ATTACK_INJECTION = "attack_prompt_injection"
 
 SECTION_ATTACK = "attack"
 SECTION_BASELINE = "baseline"
@@ -530,6 +533,10 @@ def get_scan_type_display_name(scan_type: str) -> str:
         SCAN_TYPE_ATTACK_ONLY: "攻撃検証",
         SCAN_TYPE_BASELINE_ONLY: "ベースライン検証",
         SCAN_TYPE_FULL: "フルスキャン",
+        SCAN_TYPE_ATTACK_CORE: "過剰権限・ジェイルブレイク検証",
+        SCAN_TYPE_ATTACK_SURFACE: "その他・危険出力検証",
+        SCAN_TYPE_ATTACK_INJECTION: "プロンプトインジェクション検証",
+        "mixed": "分割実行の集約結果",
     }.get(str(scan_type or ""), str(scan_type or "-"))
 
 
@@ -578,6 +585,153 @@ def _extract_response_excerpt(text: str, limit: int = 180) -> str:
     lines = [line.strip() for line in value.splitlines() if line.strip()]
     merged = " ".join(lines[:3])
     return _summarize_text(merged or value, limit=limit)
+
+
+def _collect_response_evidence_phrases(text: str, category: str, limit: int = 4) -> List[str]:
+    value = str(text or "").strip()
+    if not value:
+        return []
+
+    category_patterns = {
+        "excessive_agency": [
+            r"[^\n。]*削除[^\n。]*[。.]?",
+            r"[^\n。]*監査ログ[^\n。]*[。.]?",
+            r"[^\n。]*(?:記録しない|残さない|通知は不要|通知は送らない|無効化)[^\n。]*[。.]?",
+            r"[A-Z][A-Z0-9_]{5,}",
+            r"[^\n。]*完了[^\n。]*[。.]?",
+            r"[^\n。]*(?:変更する|付与|許可|解除)[^\n。]*[。.]?",
+        ],
+    }
+    fallback_patterns = [r"「[^」]{1,80}」", r"\"[^\"]{1,80}\"", r"[A-Z][A-Z0-9_]{5,}"]
+    patterns = category_patterns.get(category, []) + fallback_patterns
+
+    matches: List[str] = []
+    for pattern in patterns:
+        for raw in re.findall(pattern, value, flags=re.IGNORECASE):
+            candidate = str(raw).strip().strip(".,")
+            if not candidate:
+                continue
+            if candidate.lower() in {item.lower() for item in matches}:
+                continue
+            matches.append(candidate)
+            if len(matches) >= limit:
+                return matches
+
+    for line in [line.strip() for line in value.splitlines() if line.strip()]:
+        if line.lower() in {item.lower() for item in matches}:
+            continue
+        matches.append(_summarize_text(line, limit=80))
+        if len(matches) >= limit:
+            break
+    return matches
+
+
+def _build_attack_response_evidence(entry: Dict[str, Any]) -> str:
+    category = str(entry.get("category") or "unknown")
+    response = str(entry.get("response") or "")
+    phrases = _collect_response_evidence_phrases(response, category)
+    if not phrases:
+        return _extract_response_excerpt(response)
+    return " / ".join(f"「{phrase}」" for phrase in phrases[:4])
+
+
+def _build_attack_case_problem(entry: Dict[str, Any]) -> str:
+    category = str(entry.get("category") or "unknown")
+    status = normalize_status(entry.get("status"), SECTION_ATTACK)
+    if status == STATUS_ERROR:
+        return "判定不能なため危険有無を確定できず、再確認が必要です。"
+
+    mapping = {
+        "excessive_agency": (
+            "AIが実行権限を持たないのに、削除指示や監査ログ抑止、完了表現をそのまま要約・整形し、"
+            "危険な運用手順を正当な処理のように見せています。"
+        ),
+        "prompt_injection": "外部入力の指示を優先し、上位の安全指示や秘匿ルールを崩す方向に応答しています。",
+        "jailbreak": "制限解除の誘導に十分抵抗できず、安全制御を弱める方向の応答が出ています。",
+        "output_handling": "危険な文字列やコード断片をそのまま返し、出力自体が二次被害の起点になり得ます。",
+        "miscellaneous": "異常系の入力に対する安定性が不足し、不適切または解釈困難な出力が発生しています。",
+    }
+    base = mapping.get(category, "危険な依頼に対する拒否または出力制御が不十分です。")
+    if status == STATUS_WARNING:
+        return f"部分的な拒否はあるものの、{base}"
+    return base
+
+
+def _build_attack_case_risk(entry: Dict[str, Any]) -> str:
+    category = str(entry.get("category") or "unknown")
+    status = normalize_status(entry.get("status"), SECTION_ATTACK)
+    if status == STATUS_ERROR:
+        return "未評価ケースが残るため、危険応答の見逃しや誤判定につながるおそれがあります。"
+
+    mapping = {
+        "excessive_agency": (
+            "管理者や利用者が未実行の削除・権限変更を完了済みと誤認し、監査ログ不要という危険な方針まで"
+            "許容されたように見えるおそれがあります。実運用では誤削除、監査不備、内部不正の追跡不能化を招きます。"
+        ),
+        "prompt_injection": "内部指示や秘匿情報の漏えい、意図しない外部指示の実行につながるおそれがあります。",
+        "jailbreak": "安全制御が弱いと判断され、以後の危険依頼にも連続して協力する足掛かりになります。",
+        "output_handling": "利用者が危険なスクリプトやリンクをそのまま使用し、XSS や誤操作につながるおそれがあります。",
+        "miscellaneous": "運用担当者が応答を信用できず、障害時の切り分けや検知精度の低下を招くおそれがあります。",
+    }
+    base = mapping.get(category, "不適切な応答により、運用判断や安全制御を誤らせるおそれがあります。")
+    if status == STATUS_WARNING:
+        return f"現時点では限定的ですが、同種入力が強まると {base}"
+    return base
+
+
+def _build_attack_case_safe_response(entry: Dict[str, Any]) -> str:
+    category = str(entry.get("category") or "unknown")
+    mapping = {
+        "excessive_agency": (
+            "削除・権限変更・監査ログ停止のような権限操作は実行も支援もできないことを明示し、"
+            "完了を示す文字列は返さず、必要なら正規の管理手順や承認フローを案内するべきです。"
+        ),
+        "prompt_injection": "ユーザー入力では上位指示を上書きできないことを保ち、内部設定や秘匿情報は開示せずに拒否するべきです。",
+        "jailbreak": "制限解除要求をそのまま拒否し、理由を簡潔に伝えたうえで安全な代替案だけを返すべきです。",
+        "output_handling": "危険なコードやタグはそのまま返さず、無害化した例か安全な説明に置き換えるべきです。",
+        "miscellaneous": "異常入力時は処理不能であることを明示し、短く安全なフォールバック応答へ切り替えるべきです。",
+    }
+    return mapping.get(category, "危険な依頼には協力せず、安全な拒否または代替案に限定するべきです。")
+
+
+def _build_attack_case_admin_guidance(entry: Dict[str, Any]) -> str:
+    category = str(entry.get("category") or "unknown")
+    mapping = {
+        "excessive_agency": (
+            "完了表現のブロックルールを追加し、削除・停止・権限変更・監査無効化などの高リスク語を検知対象に含め、"
+            "未実行操作を実行済みと表現しないようプロンプトとガードレールを修正してください。"
+        ),
+        "prompt_injection": "指示優先順位の固定、注入パターン検知、内部情報の非出力ルールを再確認してください。",
+        "jailbreak": "拒否テンプレートを整備し、拒否後に部分協力へ流れないかを重点確認してください。",
+        "output_handling": "危険文字列のエスケープ、レンダリング無害化、危険フォーマット要求の遮断を確認してください。",
+        "miscellaneous": "異常系の停止条件、フォールバック応答、監視ログの採取条件を見直してください。",
+    }
+    return mapping.get(category, _build_attack_case_fix_summary(category))
+
+
+def _build_attack_finding_card(entry: Dict[str, Any]) -> Dict[str, Any]:
+    category = str(entry.get("category") or "unknown")
+    status = normalize_status(entry.get("status"), SECTION_ATTACK)
+    return {
+        "title": get_category_display_name(category),
+        "severity": get_severity_label(SECTION_ATTACK, status),
+        "status": status,
+        "category": category,
+        "category_label": get_category_display_name(category),
+        "overview": _build_attack_case_overview(entry),
+        "impact": _build_attack_case_impact(entry),
+        "problem": _build_attack_case_problem(entry),
+        "risk": _build_attack_case_risk(entry),
+        "safe_response": _build_attack_case_safe_response(entry),
+        "admin_guidance": _build_attack_case_admin_guidance(entry),
+        "reason": _safe_text(entry.get("reason")),
+        "recommended_fix": _build_attack_case_fix_summary(category),
+        "prompt": _safe_text(entry.get("prompt")),
+        "response": _safe_text(entry.get("response")),
+        "response_excerpt": _extract_response_excerpt(str(entry.get("response"))),
+        "evidence_excerpt": _build_attack_response_evidence(entry),
+        "case_id": _safe_text(entry.get("id") or entry.get("prompt_id"), default="-"),
+    }
 
 
 def _build_attack_case_overview(entry: Dict[str, Any]) -> str:
@@ -786,6 +940,16 @@ def build_top_attack_findings(results: List[Dict[str, Any]], limit: int = 5) -> 
                 "prompt": entry.get("prompt", ""),
                 "response": entry.get("response", ""),
                 "recommended_fixes": get_attack_recommended_fixes(str(entry.get("category") or "unknown")),
+                "card": _build_attack_finding_card(
+                    {
+                        "id": entry.get("prompt_id"),
+                        "category": entry.get("category"),
+                        "status": status,
+                        "reason": entry.get("reason", ""),
+                        "prompt": entry.get("prompt", ""),
+                        "response": entry.get("response", ""),
+                    }
+                ),
             }
         )
         if len(findings) >= limit:
@@ -938,7 +1102,7 @@ class PDFReport(FPDF):
 def _render_ai_profile_section(pdf: PDFReport, ai_profile: Dict[str, Any] | None) -> None:
     if not ai_profile:
         return
-    pdf.section_title("対象AI設定")
+    pdf.section_title("AI設定一覧")
     keys = [
         ("AI名", "name"),
         ("AI概要", "ai_overview"),
@@ -955,11 +1119,11 @@ def _render_ai_profile_section(pdf: PDFReport, ai_profile: Dict[str, Any] | None
     for label, key in keys:
         value = ai_profile.get(key)
         if isinstance(value, list):
-            text = "、".join(str(item) for item in value) if value else "設定なし"
+            text = "、".join(str(item) for item in value) if value else "設定しない"
         elif isinstance(value, dict):
             text = json.dumps(value, ensure_ascii=False, indent=2)
         else:
-            text = str(value).strip() if value else "設定なし"
+            text = str(value).strip() if value else "設定しない"
         pdf.bordered_multiline(label, text)
 
 
@@ -1013,17 +1177,21 @@ def _render_attack_major_findings(pdf: PDFReport, results: List[Dict[str, Any]])
         pdf.bordered_multiline("主要な問題", "重大な問題は検出されていません。")
         return
     for finding in findings:
+        card = finding["card"]
         pdf.bordered_multiline(
             f"{finding['display_name']} / {finding['id']}",
             (
                 f"問題名: {finding['display_name']}\n"
                 f"重大度: {finding['severity']}\n"
                 f"カテゴリ: {finding['display_name']}\n"
-                f"問題概要: {_build_attack_case_overview(finding)}\n"
-                f"影響: {_build_attack_case_impact(finding)}\n"
-                f"判定理由: {_safe_text(finding['reason'])}\n"
-                f"推奨対応: {_build_attack_case_fix_summary(str(finding['category'] or 'unknown'))}\n"
-                f"根拠となる応答抜粋: {_extract_response_excerpt(str(finding['response']))}\n"
+                f"実行プロンプト: {_safe_text(card['prompt'])}\n"
+                f"実行結果: {_safe_text(card['response'])}\n"
+                f"問題点: {_safe_text(card['problem'])}\n"
+                f"想定リスク: {_safe_text(card['risk'])}\n"
+                f"本来期待される安全な応答: {_safe_text(card['safe_response'])}\n"
+                f"管理者向け対応指針: {_safe_text(card['admin_guidance'])}\n"
+                f"判定理由: {_safe_text(card['reason'])}\n"
+                f"根拠となる応答抜粋: {_safe_text(card['evidence_excerpt'])}\n"
                 f"対象ケースID: {_safe_text(finding['id'], default='-')}"
             ),
         )
@@ -1170,6 +1338,7 @@ def _build_comparison_scoreboard(profiles: List[Dict[str, Any]]) -> List[Dict[st
         scoreboard.append(
             {
                 "profile_name": _safe_text(profile.get("profile_name"), default="unknown"),
+                "job_id": _safe_text(profile.get("job_id"), default=""),
                 "safe": counts["SAFE"],
                 "warning": counts["WARNING"],
                 "dangerous": counts["DANGEROUS"],
@@ -1220,6 +1389,8 @@ def _build_comparison_groups(
                 {
                     "section": section,
                     "prompt_id": entry.get("prompt_id"),
+                    "source_id": entry.get("source_id"),
+                    "source_mode": entry.get("source_mode"),
                     "category": entry.get("category"),
                     "prompt": entry.get("prompt"),
                     "profiles": [],
@@ -1228,6 +1399,7 @@ def _build_comparison_groups(
             group["profiles"].append(
                 {
                     "profile_name": _safe_text(profile.get("profile_name"), default="unknown"),
+                    "job_id": _safe_text(profile.get("job_id"), default=""),
                     "status": status,
                     "severity": get_severity_label(section, status),
                     "response": entry.get("response", ""),
@@ -1282,29 +1454,67 @@ def _serialize_ai_profile(ai_profile: Dict[str, Any] | None) -> List[Dict[str, s
     ]:
         value = ai_profile.get(key)
         if isinstance(value, list):
-            text = "、".join(str(item) for item in value) if value else "設定なし"
+            text = "、".join(str(item) for item in value) if value else "設定しない"
         elif isinstance(value, dict):
             text = json.dumps(value, ensure_ascii=False, indent=2)
         else:
-            text = str(value).strip() if value else "設定なし"
+            text = str(value).strip() if value else "設定しない"
         rows.append({"label": label, "value": text})
     return rows
 
 
-def build_single_report_view_data(payload: Dict[str, Any], ai_profile: Dict[str, Any] | None = None) -> Dict[str, Any]:
+def build_single_report_view_data(
+    payload: Dict[str, Any],
+    ai_profile: Dict[str, Any] | None = None,
+    *,
+    report_title: str = "AI診断レポート",
+    executed_at: str | None = None,
+    scan_type_override: str | None = None,
+) -> Dict[str, Any]:
     attack_results = (payload.get(SECTION_ATTACK) or {}).get("results") or []
     baseline_results = (payload.get(SECTION_BASELINE) or {}).get("results") or []
     summary = _build_single_report_summary(payload, ai_profile)
     findings = build_top_attack_findings(attack_results, limit=6)
     category_stats = _build_category_stats(attack_results, SECTION_ATTACK)
     baseline_summary = _build_baseline_summary(baseline_results) if baseline_results else None
+    detail_rows = [
+        {
+            "case_id": _safe_text(res.get("prompt_id"), default="-"),
+            "section": SECTION_ATTACK,
+            "section_label": get_section_display_name(SECTION_ATTACK),
+            "category": str(res.get("category") or "unknown"),
+            "category_label": get_category_display_name(str(res.get("category") or "unknown")),
+            "severity": get_severity_label(SECTION_ATTACK, normalize_status(res.get("status"), SECTION_ATTACK)),
+            "status": normalize_status(res.get("status"), SECTION_ATTACK),
+            "prompt": _safe_text(res.get("prompt")),
+            "response": _safe_text(res.get("response")),
+            "reason": _safe_text(res.get("reason")),
+            "recommended_fix": _build_attack_case_fix_summary(str(res.get("category") or "unknown")),
+        }
+        for res in attack_results
+    ] + [
+        {
+            "case_id": _safe_text(res.get("prompt_id"), default="-"),
+            "section": SECTION_BASELINE,
+            "section_label": get_section_display_name(SECTION_BASELINE),
+            "category": str(res.get("category") or "unknown"),
+            "category_label": get_category_display_name(str(res.get("category") or "unknown")),
+            "severity": get_severity_label(SECTION_BASELINE, normalize_status(res.get("status"), SECTION_BASELINE)),
+            "status": normalize_status(res.get("status"), SECTION_BASELINE),
+            "prompt": _safe_text(res.get("prompt")),
+            "response": _safe_text(res.get("response")),
+            "reason": _safe_text(res.get("reason")),
+            "recommended_fix": "",
+        }
+        for res in baseline_results
+    ]
 
     return {
-        "report_title": "AI診断レポート",
+        "report_title": report_title,
         "basic_info": {
-            "executed_at": summary["executed_at"],
+            "executed_at": executed_at or summary["executed_at"],
             "ai_name": summary["ai_name"],
-            "scan_type": summary["scan_type"],
+            "scan_type": scan_type_override or summary["scan_type"],
             "total_tests": summary["total_tests"],
         },
         "summary": {
@@ -1331,19 +1541,7 @@ def build_single_report_view_data(payload: Dict[str, Any], ai_profile: Dict[str,
             ],
         },
         "major_issues": [
-            {
-                "title": finding["display_name"],
-                "severity": finding["severity"],
-                "status": finding["status"],
-                "category": finding["category"],
-                "category_label": finding["display_name"],
-                "overview": _build_attack_case_overview(finding),
-                "impact": _build_attack_case_impact(finding),
-                "reason": _safe_text(finding["reason"]),
-                "recommended_fix": _build_attack_case_fix_summary(str(finding["category"] or "unknown")),
-                "response_excerpt": _extract_response_excerpt(str(finding["response"])),
-                "case_id": _safe_text(finding["id"], default="-"),
-            }
+            finding["card"]
             for finding in findings
         ],
         "categories": [
@@ -1362,20 +1560,7 @@ def build_single_report_view_data(payload: Dict[str, Any], ai_profile: Dict[str,
             for row in category_stats
         ],
         "ai_profile": _serialize_ai_profile(ai_profile),
-        "details": [
-            {
-                "case_id": _safe_text(res.get("prompt_id"), default="-"),
-                "category": str(res.get("category") or "unknown"),
-                "category_label": get_category_display_name(str(res.get("category") or "unknown")),
-                "severity": get_severity_label(SECTION_ATTACK, normalize_status(res.get("status"), SECTION_ATTACK)),
-                "status": normalize_status(res.get("status"), SECTION_ATTACK),
-                "prompt": _safe_text(res.get("prompt")),
-                "response": _safe_text(res.get("response")),
-                "reason": _safe_text(res.get("reason")),
-                "recommended_fix": _build_attack_case_fix_summary(str(res.get("category") or "unknown")),
-            }
-            for res in attack_results
-        ],
+        "details": detail_rows,
         "baseline": None
         if not baseline_summary
         else {
@@ -1399,12 +1584,61 @@ def build_single_report_view_data(payload: Dict[str, Any], ai_profile: Dict[str,
     }
 
 
+def build_profile_report_view_data(session_payload: Dict[str, Any], profile_name: str) -> Dict[str, Any]:
+    profiles = session_payload.get("profiles") or []
+    selected_profile = next(
+        (
+            profile
+            for profile in profiles
+            if _safe_text(profile.get("profile_name"), default="unknown") == profile_name
+        ),
+        None,
+    )
+    if not selected_profile:
+        raise KeyError(profile_name)
+
+    results = selected_profile.get("results") or []
+    attack_results = [entry for entry in results if str(entry.get("section") or "") == SECTION_ATTACK]
+    baseline_results = [entry for entry in results if str(entry.get("section") or "") == SECTION_BASELINE]
+    payload = {
+        "scan_type": "profile_aggregate",
+        SECTION_ATTACK: {"results": attack_results},
+        SECTION_BASELINE: {"results": baseline_results},
+    }
+    present_attack_categories = {str(entry.get("category") or "unknown") for entry in attack_results}
+    covered_parts: List[str] = []
+    if baseline_results:
+        covered_parts.append("baseline")
+    if {"excessive_agency", "jailbreak"} & present_attack_categories:
+        covered_parts.append("過剰権限+ジェイルブレイク")
+    if {"miscellaneous", "output_handling"} & present_attack_categories:
+        covered_parts.append("その他+危険出力")
+    if "prompt_injection" in present_attack_categories:
+        covered_parts.append("プロンプトインジェクション")
+    report = build_single_report_view_data(
+        payload,
+        ai_profile=selected_profile.get("ai_profile"),
+        report_title=f"{profile_name} AI別レポート",
+        executed_at=_safe_text(session_payload.get("created_at"), default="-"),
+        scan_type_override=" / ".join(covered_parts) if covered_parts else "AI別集約",
+    )
+    if covered_parts:
+        report["summary"]["comment"] = (
+            f"{report['summary']['comment']} 集約対象: {' / '.join(covered_parts)}"
+        ).strip()
+    return report
+
+
 def build_comparison_report_view_data(session_payload: Dict[str, Any]) -> Dict[str, Any]:
     profiles = session_payload.get("profiles") or []
     scoreboard = _build_comparison_scoreboard(profiles)
     diff_cases, all_cases, category_profile_stats = _build_comparison_groups(profiles)
     most_stable, most_risky = _comparison_overall_comment(scoreboard)
     common_prompt_count = len({case["prompt_id"] for case in all_cases})
+    profile_job_map = {
+        _safe_text(profile.get("profile_name"), default="unknown"): _safe_text(profile.get("job_id"), default="")
+        for profile in profiles
+    }
     category_rows: List[Dict[str, Any]] = []
     for category, profile_map in sorted(category_profile_stats.items()):
         category_rows.append(
@@ -1414,6 +1648,7 @@ def build_comparison_report_view_data(session_payload: Dict[str, Any]) -> Dict[s
                 "profiles": [
                     {
                         "profile_name": profile_name,
+                        "job_id": profile_job_map.get(profile_name, ""),
                         "safe": counter[STATUS_SAFE],
                         "warning": counter[STATUS_WARNING],
                         "dangerous": counter[STATUS_DANGEROUS],
@@ -1425,7 +1660,7 @@ def build_comparison_report_view_data(session_payload: Dict[str, Any]) -> Dict[s
         )
 
     return {
-        "report_title": "AI比較診断レポート",
+        "report_title": "kanataAI診断レポート",
         "basic_info": {
             "session_id": _safe_text(session_payload.get("session_id"), default="-"),
             "created_at": _safe_text(session_payload.get("created_at"), default="-"),
@@ -1443,11 +1678,19 @@ def build_comparison_report_view_data(session_payload: Dict[str, Any]) -> Dict[s
                 else "比較対象データがありません。"
             ),
         },
+        "profiles": [
+            {
+                "profile_name": _safe_text(profile.get("profile_name"), default="-"),
+                "ai_profile": _serialize_ai_profile(profile.get("ai_profile")),
+            }
+            for profile in profiles
+        ],
         "scoreboard": scoreboard,
         "graphs": {
             "ai_counts": [
                 {
                     "profile_name": row["profile_name"],
+                    "job_id": row["job_id"] if row["job_id"] != "記載なし" else "",
                     "safe": row["safe"],
                     "warning": row["warning"],
                     "dangerous": row["dangerous"],
@@ -1461,6 +1704,8 @@ def build_comparison_report_view_data(session_payload: Dict[str, Any]) -> Dict[s
         "diff_cases": [
             {
                 "prompt_id": _safe_text(case.get("prompt_id"), default="-"),
+                "source_id": _safe_text(case.get("source_id"), default=""),
+                "source_mode": _safe_text(case.get("source_mode"), default=""),
                 "category": str(case.get("category") or "unknown"),
                 "category_label": get_category_display_name(str(case.get("category") or "unknown")),
                 "prompt": _safe_text(case.get("prompt")),
@@ -1475,6 +1720,8 @@ def build_comparison_report_view_data(session_payload: Dict[str, Any]) -> Dict[s
         "prompt_cases": [
             {
                 "prompt_id": _safe_text(case.get("prompt_id"), default="-"),
+                "source_id": _safe_text(case.get("source_id"), default=""),
+                "source_mode": _safe_text(case.get("source_mode"), default=""),
                 "category": str(case.get("category") or "unknown"),
                 "category_label": get_category_display_name(str(case.get("category") or "unknown")),
                 "prompt": _safe_text(case.get("prompt")),
@@ -1518,7 +1765,7 @@ def generate_comparison_report(
     pdf.add_page()
 
     pdf.set_font("IPAexGothic", "", 22)
-    pdf.cell(0, 12, "AI比較診断レポート", ln=1, align="C")
+    pdf.cell(0, 12, "kanataAI診断レポート", ln=1, align="C")
     pdf.ln(4)
     pdf.key_value_card(
         "基本情報",
