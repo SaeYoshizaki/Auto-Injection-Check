@@ -4,4 +4,3 @@ python-dotenv
 pydantic
 python-multipart
 playwright==1.42.0
-python-3.11.13
