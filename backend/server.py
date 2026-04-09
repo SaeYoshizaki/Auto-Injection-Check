@@ -23,16 +23,6 @@ from config.scan_presets import (
     export_scan_options,
     get_allowed_scan_modes,
 )
-from report_generator import (
-    SCAN_TYPE_ATTACK_CORE,
-    SCAN_TYPE_ATTACK_INJECTION,
-    SCAN_TYPE_ATTACK_SURFACE,
-    SCAN_TYPE_BASELINE_ONLY,
-    SCAN_TYPE_FULL,
-    build_comparison_report_view_data,
-    build_profile_report_view_data,
-    build_single_report_view_data,
-)
 
 app = FastAPI()
 
@@ -284,6 +274,14 @@ def read_root():
 
 @app.get("/api/scan/options")
 def get_scan_options():
+    from report_generator import (
+        SCAN_TYPE_ATTACK_CORE,
+        SCAN_TYPE_ATTACK_INJECTION,
+        SCAN_TYPE_ATTACK_SURFACE,
+        SCAN_TYPE_BASELINE_ONLY,
+        SCAN_TYPE_FULL,
+    )
+
     payload = export_scan_options()
     payload["scan_types"] = [
         {"key": SCAN_TYPE_BASELINE_ONLY, "label": "baseline_prompts 実行", "description": "baseline_prompts.json を実行します"},
@@ -320,6 +318,8 @@ def create_comparison_report():
 
 @app.get("/api/reports/single/{job_id}")
 def get_single_html_report(job_id: str):
+    from report_generator import build_single_report_view_data
+
     with JOB_LOCK:
         job = JOB_STORE.get(job_id) or load_job_snapshot(job_id)
         if not job:
@@ -337,6 +337,8 @@ def get_single_html_report(job_id: str):
 
 @app.get("/api/reports/comparison")
 def get_comparison_html_report():
+    from report_generator import build_comparison_report_view_data
+
     path = comparison_session_path()
     if not path.exists():
         raise HTTPException(status_code=404, detail="comparison session json not found")
@@ -346,6 +348,8 @@ def get_comparison_html_report():
 
 @app.get("/api/reports/profile/{profile_name}")
 def get_profile_html_report(profile_name: str):
+    from report_generator import build_profile_report_view_data
+
     path = comparison_session_path()
     if not path.exists():
         raise HTTPException(status_code=404, detail="comparison session json not found")
