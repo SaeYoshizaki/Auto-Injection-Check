@@ -3,3 +3,4 @@ uvicorn[standard]
 python-dotenv
 pydantic
 python-multipart
+playwright==1.42.0
