@@ -1031,9 +1031,6 @@ export function ComparisonDetailsSections({
 
       <section id="charts">
         <h2 className="mb-6 text-2xl font-bold text-slate-900">図表</h2>
-        <p className="mb-6 text-sm text-slate-600">
-          AIごとの診断結果分布とカテゴリ別の危険度を可視化しています。
-        </p>
 
         <div className="grid gap-8 lg:grid-cols-2">
           <div className="rounded border border-slate-200 bg-slate-50 p-6">
@@ -1065,10 +1062,6 @@ export function ComparisonDetailsSections({
           <h2 className="mb-6 text-2xl font-bold text-slate-900">
             AI種類別詳細結果
           </h2>
-          <p className="mb-6 text-sm text-slate-600">
-            各AI設定ごとに、実際の入力と出力結果をまとめて確認できます。
-          </p>
-
           <div className="space-y-4">
             {profileCaseGroups.map((group) => (
               <AIProfileDetailCard
