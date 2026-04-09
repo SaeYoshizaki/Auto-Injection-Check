@@ -91,16 +91,6 @@ export default function ComparisonReportPage() {
               </p>
             </ConclusionBlock>
 
-            <ConclusionBlock title="提案">
-              <p>
-                本製品では口調や役割は柔軟に設定可能としつつも、
-                <strong className="font-semibold text-slate-900">
-                  {" "}
-                  命令の優先順位・安全ルール・外部入力に含まれる指示の扱い
-                </strong>
-                は、ユーザーが変更できない固定レイヤとして管理する必要がある。
-              </p>
-            </ConclusionBlock>
           </div>
         </section>
 
