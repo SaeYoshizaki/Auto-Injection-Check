@@ -50,7 +50,7 @@ export default function ComparisonReportPage() {
         report={report}
         dangerousCount={dangerousCount}
         warningCount={warningCount}
-        description={`セッション ${report.basic_info.session_id} / この製品をどう直すべきかを判断するための要約ページ`}
+        description={``}
       />
 
       <div className="mx-auto max-w-5xl space-y-12 px-6 py-12 sm:px-8">
