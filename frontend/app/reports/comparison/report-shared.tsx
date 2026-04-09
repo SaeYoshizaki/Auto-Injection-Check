@@ -966,7 +966,7 @@ export function ComparisonDetailsSections({
       <section id="settings-list">
         <h2 className="mb-6 text-2xl font-bold text-slate-900">AI設定一覧</h2>
 
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="space-y-4">
           {report.profiles.map((profile) => (
             <AIProfileSettingsCard
               key={profile.profile_name}
