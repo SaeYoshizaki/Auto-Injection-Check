@@ -21,7 +21,7 @@ const SUMMARY_TOC_ITEMS = [
   { id: "attack-tendencies", label: "通りやすかった攻撃" },
   { id: "settings", label: "攻撃が通りやすかった設定" },
   { id: "recommendations", label: "改善提案" },
-  { id: "details-link", label: "詳細分析への導線" },
+  { id: "details-link", label: "詳細" },
 ];
 
 export default function ComparisonReportPage() {
@@ -91,7 +91,6 @@ export default function ComparisonReportPage() {
                 では、攻撃がより成立しやすい傾向が見られました。
               </p>
             </ConclusionBlock>
-
           </div>
         </section>
 

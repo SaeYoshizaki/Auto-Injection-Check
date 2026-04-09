@@ -20,7 +20,7 @@ const SUMMARY_TOC_ITEMS = [
   { id: "attack-tendencies", label: "通りやすかった攻撃" },
   { id: "settings", label: "攻撃が通りやすかった設定" },
   { id: "recommendations", label: "改善提案" },
-  { id: "details-link", label: "詳細分析への導線" },
+  { id: "details-link", label: "詳細" },
 ];
 
 export default function StaticComparisonReportPage() {
@@ -37,7 +37,9 @@ export default function StaticComparisonReportPage() {
   } = useStaticComparisonReportData();
 
   if (error) {
-    return <ErrorPanel title="共有用セキュリティ診断レポート" message={error} />;
+    return (
+      <ErrorPanel title="共有用セキュリティ診断レポート" message={error} />
+    );
   }
 
   if (!report) {
@@ -153,10 +155,18 @@ export default function StaticComparisonReportPage() {
           </div>
           <div className="grid gap-4 xl:grid-cols-2">
             {fixedPatterns.map((pattern) => (
-              <SettingPatternCard key={pattern.id} pattern={pattern} tone="danger" />
+              <SettingPatternCard
+                key={pattern.id}
+                pattern={pattern}
+                tone="danger"
+              />
             ))}
             {cautionPatterns.map((pattern) => (
-              <SettingPatternCard key={pattern.id} pattern={pattern} tone="warning" />
+              <SettingPatternCard
+                key={pattern.id}
+                pattern={pattern}
+                tone="warning"
+              />
             ))}
           </div>
         </section>
@@ -171,7 +181,9 @@ export default function StaticComparisonReportPage() {
                     <span className="shrink-0 text-sm font-semibold text-slate-900">
                       {index + 1}.
                     </span>
-                    <span className="text-sm leading-7 text-slate-700">{rule}</span>
+                    <span className="text-sm leading-7 text-slate-700">
+                      {rule}
+                    </span>
                   </li>
                 ))}
               </ol>
