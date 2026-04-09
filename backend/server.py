@@ -23,7 +23,6 @@ from config.scan_presets import (
     export_scan_options,
     get_allowed_scan_modes,
 )
-from scan_manager import generate_comparison_report_from_session, run_scan_process
 from report_generator import (
     SCAN_TYPE_ATTACK_CORE,
     SCAN_TYPE_ATTACK_INJECTION,
@@ -34,7 +33,6 @@ from report_generator import (
     build_profile_report_view_data,
     build_single_report_view_data,
 )
-from scan_manager import comparison_session_path
 
 app = FastAPI()
 
@@ -54,6 +52,11 @@ AI_PROFILES_PATH = os.path.join(BASE_DIR, "ai_profiles.json")
 DATA_ROOT = Path(os.getenv("REPORT_DATA_ROOT", BASE_DIR)).resolve()
 JOB_CACHE_DIR = DATA_ROOT / "job_cache"
 JOB_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+def comparison_session_path() -> Path:
+    session_dir = DATA_ROOT / "comparison_sessions"
+    session_dir.mkdir(parents=True, exist_ok=True)
+    return session_dir / "active_session.json"
 
 
 class ScanRequest(BaseModel):
@@ -232,6 +235,8 @@ def update_job(job_id: str, **fields: Any) -> None:
 
 
 def run_scan_job(job_id: str, req: ScanRequest) -> None:
+    from scan_manager import run_scan_process
+
     update_job(
         job_id,
         status="running",
@@ -272,7 +277,6 @@ def run_scan_job(job_id: str, req: ScanRequest) -> None:
             },
         )
 
-
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "running"}
@@ -298,6 +302,8 @@ def get_ai_profiles():
 
 @app.post("/api/scan/comparison-report", response_model=ComparisonReportResponse)
 def create_comparison_report():
+    from scan_manager import generate_comparison_report_from_session
+
     try:
         result = generate_comparison_report_from_session()
     except Exception as exc:
